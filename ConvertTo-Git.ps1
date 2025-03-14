@@ -194,6 +194,13 @@ if (!(Test-Path ".git")) {
 Write-Host "Connecting to TFS at $TfsCollection..." -ForegroundColor Cyan
 $startTime = Get-Date
 
+# Allow unsecured basic auth only if the connection is HTTP (not HTTPS)
+if ($TfsCollection.ToLower().StartsWith("http://")) {
+    Write-Host "Warning: Using HTTP connection. Enabling unsecured basic authentication." -ForegroundColor Yellow
+    [Microsoft.TeamFoundation.Client.TfsClientConfigurationManager]::GetTfsClientConfiguration().AllowUnsecuredBasicAuthCredentials = $true
+} else {
+    Write-Host "Using secure HTTPS connection for authentication" -ForegroundColor Green
+}
 
 try {
     # Determine authentication method
@@ -203,7 +210,7 @@ try {
         
         $securePassword = $null
         
-             # Check for password in environment variable if not provided as parameter
+        # Check for password in environment variable if not provided as parameter
         if ([string]::IsNullOrEmpty($TfsPassword) -and -not [string]::IsNullOrEmpty($env:TfsPassword)) {
             $TfsPassword = $env:TfsPassword
             Write-Host "Using TfsPassword from environment variable" -ForegroundColor Cyan
