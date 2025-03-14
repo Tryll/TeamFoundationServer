@@ -206,7 +206,7 @@ try {
              # Check for password in environment variable if not provided as parameter
         if ([string]::IsNullOrEmpty($TfsPassword) -and -not [string]::IsNullOrEmpty($env:TfsPassword)) {
             $TfsPassword = $env:TfsPassword
-            Write-Host "Using TfsPassword from environment variable $TfsPassword" -ForegroundColor Cyan
+            Write-Host "Using TfsPassword from environment variable" -ForegroundColor Cyan
         }
 
         # Check if password was provided as parameter or environment variable
@@ -216,7 +216,6 @@ try {
             $TfsPassword = Read-Host "Enter password for $TfsUserName"
         }
 
-        Write-Host $TfsPassword
         
         $cred=New-Object System.Management.Automation.PSCredential ($TfsUserName, (ConvertTo-SecureString $TfsPassword -AsPlainText -Force))
         $windowsCred = New-Object Microsoft.VisualStudio.Services.Common.WindowsCredential($cred.GetNetworkCredential())
