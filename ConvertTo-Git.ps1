@@ -87,7 +87,6 @@ param(
 $isInPipeline = $env:TF_BUILD -eq "True"
 
 
-
 # Check if required .NET assemblies are available
 $vsPath = @(
     "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer",
@@ -244,7 +243,7 @@ try {
     $tfsServer.EnsureAuthenticated()
     $vcs = $tfsServer.GetService([Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer])
     
-    Write-Host "Connected successfully (Ensure)" -ForegroundColor Green
+    Write-Host "Connected successfully" -ForegroundColor Green
 } catch {
     Write-Host "Error connecting to TFS: $_" -ForegroundColor Red
     exit 1
