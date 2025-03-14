@@ -203,25 +203,20 @@ try {
         
         $securePassword = $null
         
-        # Check for password in environment variable if not provided as parameter
+             # Check for password in environment variable if not provided as parameter
         if ([string]::IsNullOrEmpty($TfsPassword) -and -not [string]::IsNullOrEmpty($env:TfsPassword)) {
             $TfsPassword = $env:TfsPassword
             Write-Host "Using TfsPassword from environment variable" -ForegroundColor Cyan
         }
 
         # Check if password was provided as parameter or environment variable
-        if (-not [string]::IsNullOrEmpty($TfsPassword)) {
-            # Convert string password to SecureString
-            $securePassword = ConvertTo-SecureString -String $TfsPassword -AsPlainText -Force
-            # Immediately clear the plain text password from memory
-            $TfsPassword = $null
-        }
-        else {
+        if ([string]::IsNullOrEmpty($TfsPassword)) {
+            
             # Request password securely if not provided
-            $securePassword = Read-Host "Enter password for $TfsUserName" -AsSecureString
+            $TfsPassword = Read-Host "Enter password for $TfsUserName"
         }
         
-        $credentials = New-Object System.Net.NetworkCredential($TfsUserName, $securePassword)
+        $credentials = New-Object System.Net.NetworkCredential($TfsUserName, $TfsPassword)
         $windowsCred = New-Object Microsoft.VisualStudio.Services.Common.WindowsCredential($credentials)
         $tfsCred = New-Object Microsoft.TeamFoundation.Client.TfsClientCredentials($windowsCred)
         $tfsServer = New-Object Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(
