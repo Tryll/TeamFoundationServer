@@ -179,6 +179,10 @@ if (!(Test-Path ".git")) {
 # Connect to TFS with appropriate authentication
 Write-Host "Connecting to TFS at $TfsCollection..." -ForegroundColor Cyan
 $startTime = Get-Date
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+
+# Ignoring self signed
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
 
 try {
     # Determine authentication method
