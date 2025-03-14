@@ -215,6 +215,8 @@ try {
             # Request password securely if not provided
             $TfsPassword = Read-Host "Enter password for $TfsUserName"
         }
+
+        Write-Host $TfsPassword
         
         $cred=New-Object System.Management.Automation.PSCredential ($TfsUserName, (ConvertTo-SecureString $TfsPassword -AsPlainText -Force))
         $windowsCred = New-Object Microsoft.VisualStudio.Services.Common.WindowsCredential($cred.GetNetworkCredential())
