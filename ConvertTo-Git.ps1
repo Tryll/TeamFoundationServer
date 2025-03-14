@@ -216,8 +216,8 @@ try {
             $TfsPassword = Read-Host "Enter password for $TfsUserName"
         }
         
-        $credentials = New-Object System.Net.NetworkCredential($TfsUserName, $TfsPassword)
-        $windowsCred = New-Object Microsoft.VisualStudio.Services.Common.WindowsCredential($credentials)
+        $cred=New-Object System.Management.Automation.PSCredential ($TfsUserName, (ConvertTo-SecureString $TfsPassword -AsPlainText -Force))
+        $windowsCred = New-Object Microsoft.VisualStudio.Services.Common.WindowsCredential($cred.GetNetworkCredential())
         $tfsCred = New-Object Microsoft.TeamFoundation.Client.TfsClientCredentials($windowsCred)
         $tfsServer = New-Object Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(
             [Uri]$TfsCollection, 
