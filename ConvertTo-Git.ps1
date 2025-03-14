@@ -86,11 +86,7 @@ param(
 # Check if running in Pipeline
 $isInPipeline = $env:TF_BUILD -eq "True"
 
-# Check for password in environment variable if not provided as parameter
-if ([string]::IsNullOrEmpty($TfsPassword) -and -not [string]::IsNullOrEmpty($env:TfsPassword)) {
-    $TfsPassword = $env:TfsPassword
-    Write-Host "Using TfsPassword from environment variable" -ForegroundColor Cyan
-}
+
 
 # Check if required .NET assemblies are available
 $vsPath = @(
@@ -207,6 +203,12 @@ try {
         
         $securePassword = $null
         
+        # Check for password in environment variable if not provided as parameter
+        if ([string]::IsNullOrEmpty($TfsPassword) -and -not [string]::IsNullOrEmpty($env:TfsPassword)) {
+            $TfsPassword = $env:TfsPassword
+            Write-Host "Using TfsPassword from environment variable" -ForegroundColor Cyan
+        }
+
         # Check if password was provided as parameter or environment variable
         if (-not [string]::IsNullOrEmpty($TfsPassword)) {
             # Convert string password to SecureString
