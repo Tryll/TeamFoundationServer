@@ -188,11 +188,14 @@ if (!(Test-Path ".git")) {
 Write-Host "Connecting to TFS at $TfsCollection..." -ForegroundColor Cyan
 $startTime = Get-Date
 
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::SystemDefault
-[System.Net.ServicePointManager]::ServerCertificateValidationCallback = $null
-
 # Install required package for vs2022
-Install-Package Newtonsoft.Json -RequiredVersion 12.0.0.0
+$galleryRegistered = Get-PSRepository -Name "PSGallery" -ErrorAction SilentlyContinue
+if (-not $galleryRegistered) {
+    Write-Host "Registering PowerShell Gallery..."
+    Register-PSRepository -Default
+    Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+}
+Install-Package Newtonsoft.Json -RequiredVersion 12.0.0.0 -Force
 
 try {
     # Determine authentication method
