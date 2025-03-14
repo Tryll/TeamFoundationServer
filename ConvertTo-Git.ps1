@@ -225,7 +225,9 @@ try {
 
         $cred=New-Object System.Management.Automation.PSCredential ($TfsUserName, (ConvertTo-SecureString $TfsPassword -AsPlainText -Force))
         $windowsCred = New-Object Microsoft.VisualStudio.Services.Common.WindowsCredential($cred.GetNetworkCredential())
-        $tfsCred = New-Object Microsoft.TeamFoundation.Client.TfsClientCredentials($windowsCred)
+        $basicCred = Microsoft.TeamFoundation.Client.BasicAuthCredential($cred.GetNetworkCredential())
+        $tfsCred = New-Object Microsoft.TeamFoundation.Client.TfsClientCredentials($basicCred)
+        $tfsCred.AllowInteractive = false
         $tfsServer = New-Object Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(
             [Uri]$TfsCollection, 
             $tfsCred
@@ -234,6 +236,7 @@ try {
         $TfsPassword = $null
         $cred = $null
         $windowsCred = $null
+        $basicCred = $null
 
     }
     else {
