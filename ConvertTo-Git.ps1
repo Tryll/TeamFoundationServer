@@ -230,11 +230,11 @@ try {
             [Uri]$TfsCollection, 
             $tfsCred
         )
-        
-        # Clear the secure password from memory
-        if ($securePassword -ne $null) {
-            $securePassword.Dispose()
-        }
+
+        $TfsPassword = $null
+        $cred = $null
+        $windowsCred = $null
+
     }
     else {
         # Fall back to default/integrated Windows authentication
