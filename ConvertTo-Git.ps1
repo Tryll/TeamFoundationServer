@@ -219,7 +219,7 @@ try {
         $windowsCred = New-Object Microsoft.VisualStudio.Services.Common.WindowsCredential($cred.GetNetworkCredential())
         $basicCred = Microsoft.TeamFoundation.Client.BasicAuthCredential($cred.GetNetworkCredential())
         $tfsCred = New-Object Microsoft.TeamFoundation.Client.TfsClientCredentials($basicCred)
-        $tfsCred.AllowInteractive = false
+        $tfsCred.AllowInteractive = $false
         $tfsServer = New-Object Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(
             [Uri]$TfsCollection, 
             $tfsCred
