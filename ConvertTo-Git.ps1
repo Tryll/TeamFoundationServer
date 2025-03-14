@@ -117,8 +117,16 @@ foreach ($path in $vsPath) {
         }
         
         $tfAssemblyFound = $true
+
+        $NewtonsoftPath = Join-Path -path $path -ChildPath "Newtonsoft.Json.dll"
+        if (Test-Path $NewtonsoftPath) {
+            Write-Host "Found Newtonsoft.Json assembly at: $NewtonsoftPath" -ForegroundColor Green
+            Add-Type -Path $NewtonsoftPath
+        }
+
         break
     }
+   
 }
 
 if (-not $tfAssemblyFound) {
@@ -205,9 +213,8 @@ try {
         }
         
         $credentials = New-Object System.Net.NetworkCredential($TfsUserName, $securePassword)
-        $tfsCred = New-Object Microsoft.TeamFoundation.Client.TfsClientCredentials(
-            [Microsoft.TeamFoundation.Client.BasicAuthCredential]::new($credentials)
-        )
+        $windowsCred = New-Object Microsoft.VisualStudio.Services.Common.WindowsCredential($credentials)
+        $tfsCred = New-Object Microsoft.TeamFoundation.Client.TfsClientCredentials($windowsCred)
         $tfsServer = New-Object Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(
             [Uri]$TfsCollection, 
             $tfsCred
