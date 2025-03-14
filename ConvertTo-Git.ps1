@@ -121,13 +121,13 @@ foreach ($path in $vsPath) {
 
             # Create a temporary extraction directory 
             $tempFolder = Join-Path $env:TEMP "NewtonsoftJson_Extract" 
-            New-Item -ItemType Directory -Force -Path $tempFolder | Out-Null 
+            New-Item -ItemType Directory -Force -Path $tempFolder -ErrorAction SilentlyContinue | Out-Null 
 
             # Extract all files from the zip
-            Expand-Archive -Path jsonzip.zip -DestinationPath $tempFolder -Force
+            Expand-Archive -Path jsonzip.zip -DestinationPath $tempFolder -Force -ErrorAction SilentlyContinue 
 
             # Load the assembly directly from the expected path
-            Add-Type -Path $tempFolder\bin\net45\Newtonsoft.Json.dll
+            Add-Type -Path $tempFolder\bin\net45\Newtonsoft.Json.dll 
         }
 
         break
