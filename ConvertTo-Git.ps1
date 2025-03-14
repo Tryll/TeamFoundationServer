@@ -63,9 +63,6 @@
     - Passwords are cleared from memory after use
     - Compatible with Azure DevOps pipeline secret variables
 
-.AUTHOR
-    Amund N. Letrud
-
 .LINK
     https://github.com/Tryll/TeamFoundationServer
 #>
