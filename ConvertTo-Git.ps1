@@ -194,7 +194,6 @@ if (!(Test-Path ".git")) {
 Write-Host "Connecting to TFS at $TfsCollection..." -ForegroundColor Cyan
 $startTime = Get-Date
 
-
 try {
     # Determine authentication method
     if (-not [string]::IsNullOrEmpty($TfsUserName)) {
