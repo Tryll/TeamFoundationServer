@@ -46,13 +46,13 @@ The script supports several authentication methods:
 
 ```powershell
 # Windows Authentication
-.\ConvertTo-Git.ps1 -TfsPath "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection"
+.\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection"
 
 # Username/Password Authentication
-.\ConvertTo-Git.ps1 -TfsPath "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "your_username" -TfsPassword "your_password"
+.\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "your_username" -TfsPassword "your_password"
 
 # With password from environment variable
-.\ConvertTo-Git.ps1 -TfsPath "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "your_username"
+.\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "your_username"
 ```
 
 ### Pipeline Integration
@@ -64,7 +64,7 @@ steps:
 - task: PowerShell@2
   inputs:
     filePath: '.\ConvertTo-Git.ps1'
-    arguments: '-TfsPath "$/YourProject" -OutputPath "$(Build.ArtifactStagingDirectory)" -TfsCollection "https://dev.azure.com/yourorg" -TfsUserName "$(TfsUserName)" -TfsPassword "$(TfsPassword)"'
+    arguments: '-TfsProject "$/YourProject" -OutputPath "$(Build.ArtifactStagingDirectory)" -TfsCollection "https://dev.azure.com/yourorg" -TfsUserName "$(TfsUserName)" -TfsPassword "$(TfsPassword)"'
   displayName: 'Convert TFVC to Git'
 ```
 

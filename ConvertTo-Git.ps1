@@ -8,7 +8,7 @@
     maintaining original timestamps, authors, and comments. It creates a consistent, flat 
     migration suitable for large projects with complex branch structures.
 
-.PARAMETER TfsPath
+.PARAMETER TfsProject
     The TFVC path to convert, in the format "$/ProjectName".
     This can be the root of a project or a subfolder.
 
@@ -30,15 +30,15 @@
 
 .EXAMPLE
     # Using Windows Authentication:
-    .\ConvertTo-Git.ps1 -TfsPath "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection"
+    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection"
 
 .EXAMPLE
     # Using username with interactive password prompt:
-    .\ConvertTo-Git.ps1 -TfsPath "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "your_username"
+    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "your_username"
 
 .EXAMPLE
     # Using username and password:
-    .\ConvertTo-Git.ps1 -TfsPath "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "your_username" -TfsPassword "your_password"
+    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "your_username" -TfsPassword "your_password"
 
 .EXAMPLE
     # Using in Azure DevOps pipeline:
@@ -46,7 +46,7 @@
     # - task: PowerShell@2
     #   inputs:
     #     filePath: '.\ConvertTo-Git.ps1'
-    #     arguments: '-TfsPath "$/YourProject" -OutputPath "$(Build.ArtifactStagingDirectory)" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "$(TfsUserName)" -TfsPassword "$(TfsPassword)"'
+    #     arguments: '-TfsProject "$/YourProject" -OutputPath "$(Build.ArtifactStagingDirectory)" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "$(TfsUserName)" -TfsPassword "$(TfsPassword)"'
     #   displayName: 'Convert TFVC to Git'
 
 .NOTES
@@ -68,7 +68,7 @@
 #>
 param(
     [Parameter(Mandatory=$true)]
-    [string]$TfsPath,
+    [string]$TfsProject,
 
     [Parameter(Mandatory=$true)]
     [string]$TfsCollection,
@@ -118,10 +118,20 @@ foreach ($path in $vsPath) {
         
         $tfAssemblyFound = $true
 
-        $NewtonsoftPath = Join-Path -path $path -ChildPath "Newtonsoft.Json.dll"
-        if (Test-Path $NewtonsoftPath) {
-            Write-Host "Found Newtonsoft.Json assembly at: $NewtonsoftPath" -ForegroundColor Green
-            Add-Type -Path $NewtonsoftPath
+        # Add workaround for missing VS2022 package:
+        if ($path.Contains("2022")) {
+            # Download the Newtonsoft.Json 12.0.3 package
+            curl https://github.com/JamesNK/Newtonsoft.Json/releases/download/12.0.3/Json120r3.zip -o jsonzip.zip 
+
+            # Create a temporary extraction directory 
+            $tempFolder = Join-Path $env:TEMP "NewtonsoftJson_Extract" 
+            New-Item -ItemType Directory -Force -Path $tempFolder | Out-Null 
+
+            # Extract all files from the zip
+            Expand-Archive -Path jsonzip.zip -DestinationPath $tempFolder -Force
+
+            # Load the assembly directly from the expected path
+            Add-Type -Path $tempFolder\bin\net45\Newtonsoft.Json.dll
         }
 
         break
@@ -188,14 +198,6 @@ if (!(Test-Path ".git")) {
 Write-Host "Connecting to TFS at $TfsCollection..." -ForegroundColor Cyan
 $startTime = Get-Date
 
-# Install required package for vs2022
-$galleryRegistered = Get-PSRepository -Name "PSGallery" -ErrorAction SilentlyContinue
-if (-not $galleryRegistered) {
-    Write-Host "Registering PowerShell Gallery..."
-    Register-PSRepository -Default
-    Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
-}
-Install-Package Newtonsoft.Json -RequiredVersion 12.0.0.0 -Force
 
 try {
     # Determine authentication method
@@ -249,9 +251,9 @@ try {
 }
 
 # Get all changesets for the specified path
-Write-Host "Retrieving history for $TfsPath (this may take a while)..." -ForegroundColor Cyan
+Write-Host "Retrieving history for $TfsProject (this may take a while)..." -ForegroundColor Cyan
 $history = $vcs.QueryHistory(
-    $TfsPath,
+    $TfsProject,
     [Microsoft.TeamFoundation.VersionControl.Client.VersionSpec]::Latest,
     0,
     [Microsoft.TeamFoundation.VersionControl.Client.RecursionType]::Full,
@@ -301,7 +303,7 @@ foreach ($cs in $sortedHistory) {
         $changeType = [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]($change.ChangeType)
         $itemId= [Int]::Parse($changeItem.ItemId)
         $itemPath = $changeItem.ServerItem
-        $relativePath = $itemPath.Substring($TfsPath.Length).TrimStart('/').Replace('/', '\')
+        $relativePath = $itemPath.Substring($TfsProject.Length).TrimStart('/').Replace('/', '\')
         
         if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder -or $changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Any) {
 
