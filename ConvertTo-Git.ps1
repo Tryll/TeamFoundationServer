@@ -216,14 +216,22 @@ try {
         }
 
         $cred=New-Object System.Management.Automation.PSCredential ($TfsUserName, (ConvertTo-SecureString $TfsPassword -AsPlainText -Force))
-        #$windowsCred = New-Object Microsoft.VisualStudio.Services.Common.WindowsCredential($cred.GetNetworkCredential())
-        $basicCred = New-Object Microsoft.TeamFoundation.Client.BasicAuthCredential($cred.GetNetworkCredential())
-        $tfsCred = New-Object Microsoft.TeamFoundation.Client.TfsClientCredentials($basicCred)
-        $tfsCred.AllowInteractive = $false
-        $tfsServer = New-Object Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(
+        $windowsCred = New-Object Microsoft.VisualStudio.Services.Common.WindowsCredential($cred.GetNetworkCredential())
+        #$basicCred = New-Object Microsoft.TeamFoundation.Client.BasicAuthCredential($cred.GetNetworkCredential())
+        #$tfsCred = New-Object Microsoft.TeamFoundation.Client.TfsClientCredentials($windowsCred)
+        #$tfsCred.AllowInteractive = $false
+        #$tfsServer = New-Object Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(
+        #    [Uri]$TfsCollection, 
+        #    $tfsCred
+        #)
+        $vssConnCred = New-Object Microsoft.VisualStudio.Services.Client.VssCredentials($windowsCred)
+        $vssConnection = New-Object Microsoft.VisualStudio.Services.Client.VssConnection(
             [Uri]$TfsCollection, 
-            $tfsCred
+            $vssConnCred
         )
+        # Connect and get version control client
+        $vssConnection.ConnectAsync().SyncResult()
+        $tfsServer = $vssConnection.GetClient([Microsoft.TeamFoundation.Client.TfsTeamProjectCollection])
 
         $TfsPassword = $null
         $cred = $null
@@ -237,10 +245,12 @@ try {
         $tfsServer = New-Object Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(
             [Uri]$TfsCollection
         )
+        
     }
-    
+
     # Connect to server
     $tfsServer.EnsureAuthenticated()
+    
     $vcs = $tfsServer.GetService([Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer])
     
     Write-Host "Connected successfully" -ForegroundColor Green
