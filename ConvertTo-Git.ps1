@@ -241,7 +241,7 @@ try {
     }
     
     # Connect to server
-    $tfsServer.Authenticate()
+    $tfsServer.EnsureAuthenticated()
     $vcs = $tfsServer.GetService([Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer])
     
     Write-Host "Connected successfully" -ForegroundColor Green
