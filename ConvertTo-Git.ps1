@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Converts a TFVC repository to Git while preserving complete history.
+    Converts a TFVC repository to Git while preserving complete history and branch structure.
 
 .DESCRIPTION
     ConvertTo-Git.ps1 extracts TFVC history and directly replays/applies it to a Git repository.
@@ -8,37 +8,60 @@
     maintaining original timestamps, authors, and comments. It creates a consistent, flat 
     migration suitable for large projects with complex branch structures.
 
+    The script supports multiple authentication methods:
+    - Windows Integrated Authentication (default)
+    - Basic Authentication with username/password
+    - Personal Access Token (PAT) for modern Azure DevOps environments
+
 .PARAMETER TfsProject
     The TFVC path to convert, in the format "$/ProjectName".
     This can be the root of a project or a subfolder.
 
 .PARAMETER TfsCollection
-    The URL to your TFS/Azure DevOps collection, e.g., "https://Some.Private.Server/tfs/DefaultCollection".
+    The URL to your TFS/Azure DevOps collection, e.g., "https://dev.azure.com/organization" or "https://tfs.company.com/tfs/DefaultCollection".
 
 .PARAMETER OutputPath
     The local folder where the Git repository will be created/updated.
 
-.PARAMETER TfsUserName
-    Optional username for TFS/Azure DevOps authentication.
-    If not provided, Windows integrated authentication will be used.
+.PARAMETER UseWindows
+    Switch parameter to use Windows Integrated Authentication (default if no auth method specified).
 
-.PARAMETER TfsPassword
-    Optional password for TFS/Azure DevOps authentication.
-    If not provided but TfsUserName is, the script will either:
-    - Check for an environment variable named "TfsPassword"
-    - Prompt for the password interactively using a secure prompt
+.PARAMETER UseBasic
+    Switch parameter to use Basic Authentication.
+
+.PARAMETER UsePAT
+    Switch parameter to use Personal Access Token authentication.
+
+.PARAMETER Credential
+    PSCredential object containing username/password for either Windows or Basic authentication.
+    If not provided when using these methods, the script will use default Windows credentials.
+
+.PARAMETER AccessToken
+    Personal Access Token for Azure DevOps authentication.
+    If not provided but UsePAT is specified, the script will check for an environment variable named "TfsAccessToken".
 
 .EXAMPLE
-    # Using Windows Authentication:
-    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection"
+    # Using Windows Integrated Authentication (default):
+    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://tfs.company.com/tfs/DefaultCollection"
 
 .EXAMPLE
-    # Using username with interactive password prompt:
-    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "your_username"
+    # Using Windows Authentication with explicit credentials:
+    $cred = Get-Credential
+    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://tfs.company.com/tfs/DefaultCollection" -UseWindows -Credential $cred
 
 .EXAMPLE
-    # Using username and password:
-    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "your_username" -TfsPassword "your_password"
+    # Using Basic Authentication:
+    $cred = Get-Credential
+    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://dev.azure.com/organization" -UseBasic -Credential $cred
+
+.EXAMPLE
+    # Using Personal Access Token (PAT) authentication:
+    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://dev.azure.com/organization" -UsePAT -AccessToken "your-personal-access-token"
+
+.EXAMPLE
+    # Using Personal Access Token from environment variable:
+    $env:TfsAccessToken = "your-personal-access-token"
+    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://dev.azure.com/organization" -UsePAT
 
 .EXAMPLE
     # Using in Azure DevOps pipeline:
@@ -46,7 +69,7 @@
     # - task: PowerShell@2
     #   inputs:
     #     filePath: '.\ConvertTo-Git.ps1'
-    #     arguments: '-TfsProject "$/YourProject" -OutputPath "$(Build.ArtifactStagingDirectory)" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "$(TfsUserName)" -TfsPassword "$(TfsPassword)"'
+    #     arguments: '-TfsProject "$/YourProject" -OutputPath "$(Build.ArtifactStagingDirectory)" -TfsCollection "https://dev.azure.com/organization" -UsePAT -AccessToken "$(TfsAccessToken)"'
     #   displayName: 'Convert TFVC to Git'
 
 .NOTES
@@ -58,10 +81,16 @@
     - Git command-line tools
     - Appropriate permissions in TFS/Azure DevOps
     
+    Performance:
+    - For large repositories, this script may take several hours to run
+    - Progress is displayed with percentage complete
+    - Compatible with Azure DevOps pipeline tasks
+    
     Security:
     - Credentials are handled securely using SecureString objects
     - Passwords are cleared from memory after use
     - Compatible with Azure DevOps pipeline secret variables
+    - PAT authentication is recommended for modern Azure DevOps environments
 
 .LINK
     https://github.com/Tryll/TeamFoundationServer
