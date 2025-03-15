@@ -321,7 +321,12 @@ foreach ($cs in $sortedHistory) {
         $changeType = [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]($change.ChangeType)
         $itemId= [Int]::Parse($changeItem.ItemId)
         $itemPath = $changeItem.ServerItem
-        $relativePath = $itemPath.Substring($TfsProject.Length).TrimStart('/').Replace('/', '\')
+        # Skip changes not in the specified path
+        if ($itemPath.ToLower().StartsWith($TfsProject.ToLower()) -eq $false) {
+            continue
+        }
+        # Skip first $, / characters
+        $relativePath = $itemPath.TrimStart('$').TrimStart('/').Replace('/', '\')
         
         if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder -or $changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Any) {
 
