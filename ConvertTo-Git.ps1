@@ -304,12 +304,12 @@ foreach ($cs in $sortedHistory) {
         Write-Progress -Activity "Replaying" -Status "Changeset $changesetId # $processedChangesets / $totalChangesets ($progressPercent%)" -PercentComplete $progressPercent
     }
 
-    Write-Host "[TFVC-$changesetId] Processing by $($cs.OwnerDisplayName) from $($cs.CreationDate.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Cyan
+    Write-Host "[TFS-$changesetId] Processing by $($cs.OwnerDisplayName) from $($cs.CreationDate.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Cyan
     
     # Get detailed changeset info
     $changeset = $vcs.GetChangeset($cs.ChangesetId)
     $changeCount = $changeset.Changes.Count
-    Write-Host "[TFVC-$changesetId] Contains $changeCount changes" -ForegroundColor Gray
+    Write-Host "[TFS-$changesetId] Contains $changeCount changes" -ForegroundColor Gray
    
 
     # Process each change in the changeset
@@ -331,7 +331,7 @@ foreach ($cs in $sortedHistory) {
         if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder -or $changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Any) {
 
             if ($relativePath -ne "") {
-                Write-Host "[TFVC-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
+                Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
                 $d = mkdir $relativePath -ErrorAction SilentlyContinue
                 continue
             }
@@ -351,7 +351,7 @@ foreach ($cs in $sortedHistory) {
                     [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -bor
                     [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch) } {
                    
-                    Write-Host "[TFVC-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
+                    Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
              
                     $fullPath = Join-Path -path (pwd) -ChildPath $relativePath
                    
@@ -368,18 +368,18 @@ foreach ($cs in $sortedHistory) {
                             $item.DownloadFile($fullPath)
                             $processedFiles++
                         } catch {
-                            Write-Host "[TFVC-$changesetId] [$changeCounter/$changeCount] Warning: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Yellow
+                            Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] Warning: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Yellow
                         }
                     } else {
                         $itemType=[Microsoft.TeamFoundation.VersionControl.Client.ItemType]($change.Item.ItemType)
-                        Write-Host "[TFVC-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath is unhandled $itemType" -ForegroundColor Yellow
+                        Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath is unhandled $itemType" -ForegroundColor Yellow
                     }
                     break
                 }
                 
                 { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete } {
 
-                    Write-Host "[TFVC-$changesetId] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
+                    Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
                     
                     # Remove the file or directory
                     if (Test-Path $relativePath) {
@@ -392,14 +392,14 @@ foreach ($cs in $sortedHistory) {
                     break
                 }
                 default {
-                    Write-Host "[TFVC-$changesetId] [$changeCounter/$changeCount] Unhandled change type: $($change.ChangeType) for $relativePath" -ForegroundColor Yellow
+                    Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] Unhandled change type: $($change.ChangeType) for $relativePath" -ForegroundColor Yellow
                     break
                 }
             }
         }
     }
     # Commit changes to Git
-    Write-Host "[TFVC-$changesetId] Committing changeset to Git" -ForegroundColor Gray
+    Write-Host "[TFS-$changesetId] Committing changeset to Git" -ForegroundColor Gray
     
     # Stage all changes
     git add -A
@@ -426,7 +426,7 @@ foreach ($cs in $sortedHistory) {
     Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
     Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
     
-    Write-Host "[TFVC-$changesetId] Completed" -ForegroundColor Green
+    Write-Host "[TFS-$changesetId] Completed" -ForegroundColor Green
 }
 
 # Clear the progress bar
