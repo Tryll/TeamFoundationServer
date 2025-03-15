@@ -280,8 +280,8 @@ $history = $vcs.QueryHistory(
     $null,
     $null,
     [int]::MaxValue,    # Get all changesets
-    $true, # Include details
-    $false # Don't include download info to improve performance
+    $false, # Don't Include details yet
+    $false  # Don't include download info to improve performance
 )
 
 # Sort changesets by date (oldest first)
@@ -308,14 +308,15 @@ foreach ($cs in $sortedHistory) {
     Write-Host "[TFS-$changesetId] Processing by $($cs.OwnerDisplayName) from $($cs.CreationDate.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Cyan
     
     # Get detailed changeset info
-    $changeset = $vcs.GetChangeset($cs.ChangesetId,$true,$false,$true)
-    $changeCount = $changeset.Changes.Count
+    $changeset = $vcs.GetChangeset($cs.ChangesetId)
+    $changes = $vcs.GetChangesForChangeset($cs.ChangesetId, $false, [Microsoft.TeamFoundation.VersionControl.Client.VersionSpec]::Latest, [int]::MaxValue,$null, $null,$true)
+    $changeCount = $changes.Count
     Write-Host "[TFS-$changesetId] Contains $changeCount changes" -ForegroundColor Gray
    
 
     # Process each change in the changeset
     $changeCounter=0
-    foreach ($change in $changeset.Changes) {
+    foreach ($change in $changes) {
         $changeCounter++
         $changeItem = $change.Item
         $changesetId = [Int]::Parse($changeItem.ChangesetId)
@@ -363,10 +364,10 @@ foreach ($cs in $sortedHistory) {
                 }
 
                 # Rename if source file is referenced:
-                { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -and !([String]::IsNullOrEmpty($change.SourceServerItem))  } {
+                { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -and $change.MergeSources.Count -gt 0  } {
 
                
-                    Write-Host "[TFS-$changesetId] rename "
+                    Write-Host "[TFS-$changesetId] rename1 "
 
                     $change | Convertto-Json
 
