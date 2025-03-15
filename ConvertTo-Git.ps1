@@ -366,20 +366,12 @@ foreach ($cs in $sortedHistory) {
                 # Rename if source file is referenced:
                 { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -and $change.MergeSources.Count -gt 0  } {
 
-               
-                    Write-Host "[TFS-$changesetId] rename1 "
+                    # Find the last reference to this file
+                    $lastSource = $change.MergeSources | Where-Object { $_.IsRename -eq $true } | Sort-Object -Property VersionFrom -Descending | Select-Object -First 1
 
-                    $change | Convertto-Json
-
-                    $oldRelativePath = $change.SourceServerItem.Substring($TfsProject.Length).TrimStart('/').Replace('/', '\')
+                    $oldRelativePath = $lastSource.ServerItem.Substring($TfsProject.Length).TrimStart('/').Replace('/', '\')
                     
                     Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $oldRelativePath to $relativePath" -ForegroundColor Gray
-
-
-                    # Get the current location
-                    $currentLocation = Get-Location
-                    $oldFullPath = Join-Path -Path $currentLocation -ChildPath $oldRelativePath
-                    $newFullPath = Join-Path -Path $currentLocation -ChildPath $relativePath
 
                     # Create target directory if it doesn't exist
                     $targetDir = Split-Path -Path $relativePath -Parent
