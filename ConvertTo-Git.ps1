@@ -349,7 +349,8 @@ foreach ($cs in $sortedHistory) {
                 { $_ -band ([Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add -bor 
                     [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -bor
                     [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -bor
-                    [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch -bor) } {
+                    [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch -bor
+                    [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Undelete) } {
                    
                     Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
              
