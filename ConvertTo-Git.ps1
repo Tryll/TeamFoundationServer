@@ -190,7 +190,7 @@ if (!(Test-Path ".git")) {
     git init -b main
     
     # Create .gitattributes file for proper line endings
-    @"
+    $gitattributes = @"
 # Set default behavior to automatically normalize line endings
 * text=auto
 
@@ -211,10 +211,11 @@ if (!(Test-Path ".git")) {
 *.xlsx binary
 *.docx binary
 *.pptx binary
-"@ | Out-File -FilePath ".gitattributes" -Encoding utf8
-    
-    git add .gitattributes
-    git commit -m "Initial commit with .gitattributes"
+"@ 
+   # Disabled for now
+   # $gitattributes | Out-File -FilePath ".gitattributes" -Encoding utf8
+   # git add .gitattributes
+   # git commit -m "Initial commit with .gitattributes"
 }
 
 # Connect to TFS with appropriate authentication
