@@ -343,17 +343,17 @@ foreach ($cs in $sortedHistory) {
 
         # Proces changes only if htey have a file path
         if (-not [String]::IsNullOrEmpty($relativePath)) {
-         
-
+          
             # Handle different change types
             switch ($change.ChangeType) {
                 { $_ -band ([Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add -bor 
                     [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -bor
-                    [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename)} {
-
+                    [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -bor
+                    [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch) } {
                    
                     Write-Host "[TFVC-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
-
+             
+                    $fullPath = Join-Path -path (pwd) -ChildPath $relativePath
                    
                     # Create directory structure
                     $localDir = Split-Path -Path $relativePath -Parent
@@ -365,11 +365,14 @@ foreach ($cs in $sortedHistory) {
                     if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
                         try {
                             $item = $vcs.GetItem($itemId, $changesetId)
-                            $item.DownloadFile($relativePath)
+                            $item.DownloadFile($fullPath)
                             $processedFiles++
                         } catch {
                             Write-Host "[TFVC-$changesetId] [$changeCounter/$changeCount] Warning: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Yellow
                         }
+                    } else {
+                        $itemType=[Microsoft.TeamFoundation.VersionControl.Client.ItemType]($change.Item.ItemType)
+                        Write-Host "[TFVC-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath is unhandled $itemType" -ForegroundColor Yellow
                     }
                     break
                 }
