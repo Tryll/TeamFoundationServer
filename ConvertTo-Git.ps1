@@ -344,7 +344,6 @@ foreach ($cs in $sortedHistory) {
         # Proces changes only if htey have a file path
         if (-not [String]::IsNullOrEmpty($relativePath)) {
          
-            $localPath = Join-Path -Path $OutputPath -ChildPath $relativePath
 
             # Handle different change types
             switch ($change.ChangeType) {
@@ -357,7 +356,7 @@ foreach ($cs in $sortedHistory) {
 
                    
                     # Create directory structure
-                    $localDir = Split-Path -Path $localPath -Parent
+                    $localDir = Split-Path -Path $relativePath -Parent
                     if (!(Test-Path $localDir)) {
                         New-Item -ItemType Directory -Path $localDir -Force | Out-Null
                     }
@@ -366,7 +365,7 @@ foreach ($cs in $sortedHistory) {
                     if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
                         try {
                             $item = $vcs.GetItem($itemId, $changesetId)
-                            $item.DownloadFile($localPath)
+                            $item.DownloadFile($relativePath)
                             $processedFiles++
                         } catch {
                             Write-Host "[TFVC-$changesetId] [$changeCounter/$changeCount] Warning: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Yellow
@@ -380,11 +379,11 @@ foreach ($cs in $sortedHistory) {
                     Write-Host "[TFVC-$changesetId] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
                     
                     # Remove the file or directory
-                    if (Test-Path $localPath) {
-                        if (Test-Path $localPath -PathType Container) {
-                            Remove-Item -Path $localPath -Recurse -Force
+                    if (Test-Path $relativePath) {
+                        if (Test-Path $relativePath -PathType Container) {
+                            Remove-Item -Path $relativePath -Recurse -Force
                         } else {
-                            Remove-Item -Path $localPath -Force
+                            Remove-Item -Path $relativePath -Force
                         }
                     }
                     break
