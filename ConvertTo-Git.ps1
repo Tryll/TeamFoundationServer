@@ -337,8 +337,6 @@ foreach ($cs in $sortedHistory) {
             }
             
         }
-
-        #$change | ConvertTo-Json
      
 
         # Proces changes only if htey have a file path
