@@ -38,49 +38,6 @@ After migration to Git, project leads can:
 - Implement proper Git workflows optimized for their team's needs
 - Take advantage of Git's distributed capabilities
 
-## Usage
-
-### Authentication Options
-
-The script supports several authentication methods:
-
-```powershell
-# Windows Authentication
-.\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection"
-
-# Username/Password Authentication
-.\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "your_username" -TfsPassword "your_password"
-
-# With password from environment variable
-.\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://Some.Private.Server/tfs/DefaultCollection" -TfsUserName "your_username"
-```
-
-### Pipeline Integration
-
-Easily integrate with Azure DevOps pipelines:
-
-```yaml
-steps:
-- task: PowerShell@2
-  inputs:
-    filePath: '.\ConvertTo-Git.ps1'
-    arguments: '-TfsProject "$/YourProject" -OutputPath "$(Build.ArtifactStagingDirectory)" -TfsCollection "https://dev.azure.com/yourorg" -TfsUserName "$(TfsUserName)" -TfsPassword "$(TfsPassword)"'
-  displayName: 'Convert TFVC to Git'
-```
-
-## Requirements
-
-- Windows PowerShell 5.1 or newer
-- Visual Studio with Team Explorer (2019 or 2022) installed
-- Git command-line tools
-- Appropriate permissions in the TFS/Azure DevOps project
-
-## Security Notes
-
-- Credentials are handled securely using SecureString objects
-- Passwords are cleared from memory after use
-- Compatible with Azure DevOps pipeline secret variables
-- No credentials are logged or displayed in plain text
 
 ## License
 
