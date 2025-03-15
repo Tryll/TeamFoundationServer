@@ -326,7 +326,7 @@ foreach ($cs in $sortedHistory) {
             continue
         }
         # Skip first $, / characters
-        $relativePath = $itemPath.TrimStart('$').TrimStart('/').Replace('/', '\')
+        $relativePath = $itemPath.Substring($TfsProject.Length).TrimStart('/').Replace('/', '\')
         
         if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder -or $changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Any) {
 
@@ -357,7 +357,7 @@ foreach ($cs in $sortedHistory) {
                    
                     # Create directory structure
                     $localDir = Split-Path -Path $relativePath -Parent
-                    if (!(Test-Path $localDir)) {
+                    if ($localDir -ne "" -and !(Test-Path $localDir)) {
                         New-Item -ItemType Directory -Path $localDir -Force | Out-Null
                     }
                     
