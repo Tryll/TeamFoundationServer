@@ -309,7 +309,7 @@ foreach ($cs in $sortedHistory) {
     
     # Get detailed changeset info
     $changeset = $vcs.GetChangeset($cs.ChangesetId)
-    $changes = $vcs.GetChangesForChangeset($cs.ChangesetId, $false, [Microsoft.TeamFoundation.VersionControl.Client.VersionSpec]::Latest, [int]::MaxValue,$null, $null,$true)
+    $changes = $vcs.GetChangesForChangeset($cs.ChangesetId, $false,  [int]::MaxValue, $null, $null, $true)
     $changeCount = $changes.Count
     Write-Host "[TFS-$changesetId] Contains $changeCount changes" -ForegroundColor Gray
    
@@ -435,11 +435,6 @@ foreach ($cs in $sortedHistory) {
                 default {
                  
                     Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
-
-                    if ($_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
-                         Write-Host "[TFS-$changesetId] rename2 "
-                        $change | Convertto-Json
-                    }
 
                     $fullPath = Join-Path -path (pwd) -ChildPath $relativePath
                    
