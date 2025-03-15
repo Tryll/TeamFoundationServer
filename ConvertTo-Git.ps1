@@ -365,7 +365,7 @@ foreach ($cs in $sortedHistory) {
                 { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename } {
 
                     Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [Rename] $relativePath" -ForegroundColor Gray
-                    $change | convretto-Json
+                    $change | convertto-Json
 
                     #rename file  
                   
