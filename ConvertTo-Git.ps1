@@ -367,7 +367,8 @@ foreach ($cs in $sortedHistory) {
                 { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename } {
 
                
-                   
+                    Write-Host "[TFS-$changesetId] rename "
+
                     $change | Convertto-Json
 
                     $oldRelativePath = $change.SourceServerItem.Substring($TfsProject.Length).TrimStart('/').Replace('/', '\')
