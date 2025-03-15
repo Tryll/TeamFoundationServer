@@ -364,7 +364,7 @@ foreach ($cs in $sortedHistory) {
                 }
 
                 # Rename if source file is referenced:
-                { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -and $change.SourceServerItem -ne "" } {
+                { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -and ![String]::IsNullOrEmpty($change.SourceServerItem)} {
                 
                     $oldRelativePath = $change.SourceServerItem.Substring($TfsProject.Length).TrimStart('/').Replace('/', '\')
                     
