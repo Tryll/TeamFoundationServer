@@ -66,6 +66,7 @@
 .LINK
     https://github.com/Tryll/TeamFoundationServer
 #>
+[CmdletBinding(DefaultParameterSetName="UseWindows")]
 param(
     [Parameter(Mandatory=$true)]
     [string]$TfsProject,
@@ -75,12 +76,25 @@ param(
     
     [Parameter(Mandatory=$true)]
     [string]$OutputPath,
+
+    [Parameter(Mandatory=$false, ParameterSetName="UseWindows")]
+    [switch]$UseWindows,
     
-    [Parameter(Mandatory=$false)]
-    [string]$TfsUserName,
+    [Parameter(Mandatory=$false, ParameterSetName="UseBasic")]
+    [switch]$UseBasic,
+
+    [Parameter(Mandatory=$false, ParameterSetName="UseWindows")]
+    [Parameter(Mandatory=$false, ParameterSetName="UseBasic")]
+    [System.Management.Automation.PSCredential]
+    [System.Management.Automation.Credential()]
+    $Credential = [System.Management.Automation.PSCredential]::Empty,
+
+    [Parameter(Mandatory=$false, ParameterSetName="UsePAT")]
+    [switch]$UsePAT,
+
+    [Parameter(Mandatory=$false, ParameterSetName="UsePAT")]
+    [string]$AccessToken = $env:TfsAccessToken
     
-    [Parameter(Mandatory=$false)]
-    [string]$TfsPassword
 )
 
 # Check if running in Pipeline
@@ -102,6 +116,7 @@ $tfAssemblyFound = $false
 foreach ($path in $vsPath) {
     $tfAssemblyPath = Join-Path -Path $path -ChildPath "Microsoft.TeamFoundation.VersionControl.Client.dll"
     if (Test-Path $tfAssemblyPath) {
+
         Write-Host "Found TFS assembly at: $tfAssemblyPath" -ForegroundColor Green
         Add-Type -Path $tfAssemblyPath
         
@@ -110,24 +125,8 @@ foreach ($path in $vsPath) {
         if (Test-Path $clientAssemblyPath) {
             Add-Type -Path $clientAssemblyPath
         }
-        
+
         $tfAssemblyFound = $true
-
-        # Add workaround for missing VS2022 package:
-        if ($path.Contains("2022")) {
-            # Download the Newtonsoft.Json 12.0.3 package
-            curl https://github.com/JamesNK/Newtonsoft.Json/releases/download/12.0.3/Json120r3.zip -o jsonzip.zip 
-
-            # Create a temporary extraction directory 
-            $tempFolder = Join-Path $env:TEMP "NewtonsoftJson_Extract" 
-            New-Item -ItemType Directory -Force -Path $tempFolder -ErrorAction SilentlyContinue | Out-Null 
-
-            # Extract all files from the zip
-            Expand-Archive -Path jsonzip.zip -DestinationPath $tempFolder -Force -ErrorAction SilentlyContinue 
-
-            # Load the assembly directly from the expected path
-            Add-Type -Path $tempFolder\bin\net45\Newtonsoft.Json.dll 
-        }
 
         break
     }
@@ -193,63 +192,44 @@ if (!(Test-Path ".git")) {
 Write-Host "Connecting to TFS at $TfsCollection..." -ForegroundColor Cyan
 $startTime = Get-Date
 
-
 try {
-    # Determine authentication method
-    if (-not [string]::IsNullOrEmpty($TfsUserName)) {
-        # Use username/password auth
-        Write-Host "Using username/password authentication for $TfsUserName" -ForegroundColor Cyan
-        
-        $securePassword = $null
-        
-        # Check for password in environment variable if not provided as parameter
-        if ([string]::IsNullOrEmpty($TfsPassword) -and -not [string]::IsNullOrEmpty($env:TfsPassword)) {
-            $TfsPassword = $env:TfsPassword
-            Write-Host "Using TfsPassword from environment variable" -ForegroundColor Cyan
+    switch ($PSCmdlet.ParameterSetName) {
+        "UseWindows" {
+            # Windows Integrated Authentication logic
+            if ($Credential -ne [System.Management.Automation.PSCredential]::Empty) {
+                Write-Host "Using provided crendentials for Windows authentication" -ForegroundColor Cyan
+                $tfsCred = $Credential.GetNetworkCredential()
+            } else {
+                # Fall back to default/integrated Windows authentication
+                Write-Host "Using default Windows authentication" -ForegroundColor Cyan
+                $tfsCred = [System.Net.CredentialCache]::DefaultNetworkCredentials
+            }
         }
 
-        # Check if password was provided as parameter or environment variable
-        if ([string]::IsNullOrEmpty($TfsPassword)) {
-            
-            # Request password securely if not provided
-            $TfsPassword = Read-Host "Enter password for $TfsUserName"
+        "UseBasic" {
+            Write-Host "Using provided crendentials for Basic authentication" -ForegroundColor Cyan
+            $tfsCred = $cred.GetNetworkCredential()
         }
 
-        $cred=New-Object System.Management.Automation.PSCredential ($TfsUserName, (ConvertTo-SecureString $TfsPassword -AsPlainText -Force))
-        $windowsCred = New-Object Microsoft.VisualStudio.Services.Common.WindowsCredential($cred.GetNetworkCredential())
-        #$basicCred = New-Object Microsoft.TeamFoundation.Client.BasicAuthCredential($cred.GetNetworkCredential())
-        #$tfsCred = New-Object Microsoft.TeamFoundation.Client.TfsClientCredentials($windowsCred)
-        #$tfsCred.AllowInteractive = $false
-        #$tfsServer = New-Object Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(
-        #    [Uri]$TfsCollection, 
-        #    $tfsCred
-        #)
-        $vssConnCred = New-Object Microsoft.VisualStudio.Services.Client.VssCredentials($windowsCred)
-        $vssConnection = New-Object Microsoft.VisualStudio.Services.Client.VssConnection(
-            [Uri]$TfsCollection, 
-            $vssConnCred
-        )
-        # Connect and get version control client
-        $vssConnection.ConnectAsync().SyncResult()
-        $tfsServer = $vssConnection.GetClient([Microsoft.TeamFoundation.Client.TfsTeamProjectCollection])
-
-        $TfsPassword = $null
-        $cred = $null
-        $windowsCred = $null
-        $basicCred = $null
-
+        "UsePAT" {
+            Write-Output "Using Personal Access Token authentication (Parameter or Environment TfsAccessToken)" -ForegroundColor Cyan
+            if (!$AccessToken -and !$env:TfsAccessToken) {
+                Write-Host "Error: Personal Access Token not provided" -ForegroundColor Red
+                exit 1
+            }
+            $tfsCred = New-Object System.Net.NetworkCredential("", $AccessToken)     
+        }
     }
-    else {
-        # Fall back to default/integrated Windows authentication
-        Write-Host "Using default Windows authentication" -ForegroundColor Cyan
-        $tfsServer = New-Object Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(
-            [Uri]$TfsCollection
-        )
-        
-    }
+
+   
+    $tfsServer = New-Object Microsoft.TeamFoundation.Client.TfsTeamProjectCollection(
+        [Uri]$TfsCollection, 
+        $tfsCred
+    )
+
 
     # Connect to server
-    $tfsServer.EnsureAuthenticated()
+    $tfsServer.Authenticate()
     
     $vcs = $tfsServer.GetService([Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer])
     
