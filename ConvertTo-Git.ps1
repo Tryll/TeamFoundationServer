@@ -362,7 +362,7 @@ foreach ($cs in $sortedHistory) {
                 }
 
                 # Rename if source file is referenced:
-                { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename } {
+                { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -and !([String]::IsNullOrEmpty($change.SourceServerItem))  } {
 
                
                     Write-Host "[TFS-$changesetId] rename "
@@ -433,6 +433,11 @@ foreach ($cs in $sortedHistory) {
                 default {
                  
                     Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
+
+                    if ($_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
+                         Write-Host "[TFS-$changesetId] rename2 "
+                        $change | Convertto-Json
+                    }
 
                     $fullPath = Join-Path -path (pwd) -ChildPath $relativePath
                    
