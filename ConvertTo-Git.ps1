@@ -346,11 +346,28 @@ foreach ($cs in $sortedHistory) {
           
             # Handle different change types
             switch ($change.ChangeType) {
-                { $_ -band ([Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add -bor 
-                    [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -bor
-                    [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -bor
-                    [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch -bor
-                    [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Undelete) } {
+               
+                
+                { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete } {
+
+                    Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
+                    
+                    # Remove the file or directory
+                    if (Test-Path $relativePath) {
+                        if (Test-Path $relativePath -PathType Container) {
+                            Remove-Item -Path $relativePath -Recurse -Force
+                        } else {
+                            Remove-Item -Path $relativePath -Force
+                        }
+                    }
+                    break
+                }
+                default {
+                # { $_ -band ([Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add -bor 
+                 #   [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -bor
+               #     [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -bor
+                #    [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch -bor
+                #   [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Undelete) } {
                    
                     Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
              
@@ -377,25 +394,10 @@ foreach ($cs in $sortedHistory) {
                     }
                     break
                 }
-                
-                { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete } {
-
-                    Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
-                    
-                    # Remove the file or directory
-                    if (Test-Path $relativePath) {
-                        if (Test-Path $relativePath -PathType Container) {
-                            Remove-Item -Path $relativePath -Recurse -Force
-                        } else {
-                            Remove-Item -Path $relativePath -Force
-                        }
-                    }
-                    break
-                }
-                default {
-                    Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] Unhandled change type: $($change.ChangeType) for $relativePath" -ForegroundColor Yellow
-                    break
-                }
+                #default {
+                #    Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] Unhandled change type: $($change.ChangeType) for $relativePath" -ForegroundColor Yellow
+                #    break
+                #}
             }
         }
     }
