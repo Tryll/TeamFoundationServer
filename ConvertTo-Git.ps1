@@ -429,7 +429,11 @@ foreach ($cs in $sortedHistory) {
                 default {
                  
                     Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
-             
+                    # Debug dump
+                    if ($_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
+                        $change | ConvertTo-Json
+                    }
+
                     $fullPath = Join-Path -path (pwd) -ChildPath $relativePath
                    
                     # Create directory structure
