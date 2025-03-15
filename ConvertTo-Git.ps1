@@ -187,7 +187,7 @@ Write-Host "Initializing Git repository in $OutputPath..." -ForegroundColor Cyan
 Set-Location $OutputPath
 
 if (!(Test-Path ".git")) {
-    git init
+    git init -b main
     
     # Create .gitattributes file for proper line endings
     @"
