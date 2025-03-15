@@ -364,11 +364,16 @@ foreach ($cs in $sortedHistory) {
                 }
 
                 # Rename if source file is referenced:
-                { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -and ![String]::IsNullOrEmpty($change.SourceServerItem)} {
-                
+                { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename} {
+
+               
+                    $item = $vcs.GetItem($itemId, $changesetId)
+                    $item | Convertto-Json
+
                     $oldRelativePath = $change.SourceServerItem.Substring($TfsProject.Length).TrimStart('/').Replace('/', '\')
                     
                     Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $oldRelativePath to $relativePath" -ForegroundColor Gray
+
 
                     # Get the current location
                     $currentLocation = Get-Location
@@ -430,7 +435,7 @@ foreach ($cs in $sortedHistory) {
                  
                     Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
                     # Debug dump
-                    if ($_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
+                    if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
                         $change | ConvertTo-Json
                     }
 
