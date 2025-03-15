@@ -347,7 +347,7 @@ foreach ($cs in $sortedHistory) {
             # Handle different change types
             switch ($change.ChangeType) {
                
-                
+                # Remove file
                 { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete } {
 
                     Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
@@ -362,22 +362,72 @@ foreach ($cs in $sortedHistory) {
                     }
                     break
                 }
-                { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename } {
 
-                    Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [Rename] $relativePath" -ForegroundColor Gray
-                    $change | convertto-Json
+                # Rename if source file is referenced:
+                { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -and $change.SourceServerItem -ne "" } {
+                
+                    $oldRelativePath = $change.SourceServerItem.Substring($TfsProject.Length).TrimStart('/').Replace('/', '\')
+                    
+                    Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $oldRelativePath to $relativePath" -ForegroundColor Gray
 
-                    #rename file  
-                  
-                    break
+                    # Get the current location
+                    $currentLocation = Get-Location
+                    $oldFullPath = Join-Path -Path $currentLocation -ChildPath $oldRelativePath
+                    $newFullPath = Join-Path -Path $currentLocation -ChildPath $relativePath
+
+                    # Create target directory if it doesn't exist
+                    $targetDir = Split-Path -Path $relativePath -Parent
+                    if ($targetDir -and !(Test-Path $targetDir)) {
+                        New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+                    }
+
+                    # Move the old file or directory
+                    if (Test-Path $oldRelativePath) {
+                        if (!(Test-Path $relativePath)) {
+                            # The -NewName parameter should be just the new name, not the full path
+                            $newName = Split-Path -Path $relativePath -Leaf
+                            $targetDir = Split-Path -Path $relativePath -Parent
+                            
+                            # If we're moving to a different directory
+                            if ($targetDir -and (Split-Path -Path $oldRelativePath -Parent) -ne $targetDir) {
+                                # First ensure the target directory exists
+                                if (!(Test-Path $targetDir)) {
+                                    New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+                                }
+                                # Move item to the new directory
+                                Move-Item -Path $oldRelativePath -Destination $targetDir -Force
+                                # Then rename if necessary
+                                $movedItem = Join-Path -Path $targetDir -ChildPath (Split-Path -Path $oldRelativePath -Leaf)
+                                if ((Split-Path -Path $oldRelativePath -Leaf) -ne $newName) {
+                                    Rename-Item -Path $movedItem -NewName $newName -Force
+                                }
+                            } else {
+                                # Just rename in the same directory
+                                Rename-Item -Path $oldRelativePath -NewName $newName -Force
+                            }
+                        } else {
+                            Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $oldRelativePath to $relativePath - Already exists" -ForegroundColor Yellow
+                        }
+                    } else {
+                        if (!(Test-Path $relativePath)) {
+                            Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $oldRelativePath to $relativePath - Source does not exist" -ForegroundColor Yellow
+                        } else {
+                            Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $oldRelativePath to $relativePath - Allready moved" -ForegroundColor Gray
+                        }
+                        
+                    }
+
+                    # Check if the new file exists after rename attempt
+                    if (Test-Path $relativePath) {
+                        break
+                    }
+                    
+                    # If it does not exist continue to default processing
                 }
+                
+                # Default handling - Download file
                 default {
-                # { $_ -band ([Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add -bor 
-                 #   [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -bor
-               #     [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -bor
-                #    [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch -bor
-                #   [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Undelete) } {
-                   
+                 
                     Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
              
                     $fullPath = Join-Path -path (pwd) -ChildPath $relativePath
