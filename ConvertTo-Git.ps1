@@ -362,6 +362,15 @@ foreach ($cs in $sortedHistory) {
                     }
                     break
                 }
+                { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename } {
+
+                    Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [Rename] $relativePath" -ForegroundColor Gray
+                    $change | convretto-Json
+
+                    #rename file  
+                  
+                    break
+                }
                 default {
                 # { $_ -band ([Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add -bor 
                  #   [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -bor
