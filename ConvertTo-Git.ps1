@@ -307,7 +307,7 @@ foreach ($cs in $sortedHistory) {
     Write-Host "[TFS-$changesetId] Processing by $($cs.OwnerDisplayName) from $($cs.CreationDate.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Cyan
     
     # Get detailed changeset info
-    $changeset = $vcs.GetChangeset($cs.ChangesetId)
+    $changeset = $vcs.GetChangeset($cs.ChangesetId,$true,$false,$true)
     $changeCount = $changeset.Changes.Count
     Write-Host "[TFS-$changesetId] Contains $changeCount changes" -ForegroundColor Gray
    
