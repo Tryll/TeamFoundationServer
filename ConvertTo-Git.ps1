@@ -413,7 +413,7 @@ foreach ($cs in $sortedHistory) {
     $env:GIT_COMMITTER_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
     
     # Prepare commit message
-    $commitMessage = "[TFVC-$($changeset.ChangesetId)] $($changeset.Comment)"
+    $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
     
     # Make the commit
     git commit -m $commitMessage --allow-empty
