@@ -16,12 +16,13 @@ A comprehensive TFVC to Git migration tool that accurately preserves your projec
 
 **Key Features:**
 
-- Recursively processes all changesets through the entire branch hierarchy
+- Creates a unified source tree for the complete TFS project, for consistent handling of large projects
+- TFS Branches are processed as directories (owners will split to the required branches after migration)
+- Recursively processes all changesets through the entire project hierarchy
 - Preserves complete commit history with original timestamps and authors
 - Handles all TFVC change types (add, edit, delete, rename, branch)
 - Supports secure authentication methods
 - Optimized for pipeline execution in Azure DevOps
-- Creates a flat migration for consistent handling of large projects
 
 **When to use this approach:**
 
@@ -37,6 +38,14 @@ After migration to Git, project leads can:
 - Split the monolithic repository into appropriate Git branches as needed
 - Implement proper Git workflows optimized for their team's needs
 - Take advantage of Git's distributed capabilities
+
+
+**Real world run:**
+
+2025-03-16T05:37:53.7499263Z Conversion completed!
+2025-03-16T05:37:53.7500659Z Total changesets processed: 4928
+2025-03-16T05:37:53.7500916Z Total files processed: 271493
+2025-03-16T05:37:53.7501140Z Total conversion time: 6 hours, 26 minutes, 18 seconds
 
 
 ## License
