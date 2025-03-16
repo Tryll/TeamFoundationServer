@@ -41,12 +41,12 @@ After migration to Git, project leads can:
 
 
 **Real world run:**
-
+```code
 2025-03-16T05:37:53.7499263Z Conversion completed!
 2025-03-16T05:37:53.7500659Z Total changesets processed: 4928
 2025-03-16T05:37:53.7500916Z Total files processed: 271493
 2025-03-16T05:37:53.7501140Z Total conversion time: 6 hours, 26 minutes, 18 seconds
-
+```
 
 ## License
 
