@@ -12,12 +12,12 @@ This repository contains PowerShell scripts that help with TFS management tasks,
 
 ### ConvertTo-Git.ps1
 
-A comprehensive TFVC to Git migration tool that accurately preserves your project history by replaying all changes chronologically.
+A comprehensive TFVC to Git migration tool that accurately preserves your project history by replaying all changes chronologically, in less than 400 lines of code.
 
 **Key Features:**
 
 - Creates a unified source tree for the complete TFS project, for consistent handling of large projects
-- TFS Branches are processed as directories (owners will split to the required branches after migration)
+- TFS branches are processed as directories (owners will split to the required branches after migration)
 - Recursively processes all changesets through the entire project hierarchy
 - Preserves complete commit history with original timestamps and authors
 - Handles all TFVC change types (add, edit, delete, rename, branch)
@@ -28,7 +28,7 @@ A comprehensive TFVC to Git migration tool that accurately preserves your projec
 
 While this migration approach can be slower than other methods, it provides several advantages:
 - Transparent, auditable conversion process with simple, reviewable code
-- Consistent handling of complex projects with many stale branches
+- Consistent handling of complex projects with many stale and deleted branches
 - Complete preservation of history, including changesets, timestamps, and authors
 - Suitable for regulated environments requiring migration validation
 
@@ -47,6 +47,7 @@ After migration to Git, project leads can:
 2025-03-16T05:37:53.7500916Z Total files processed: 271493
 2025-03-16T05:37:53.7501140Z Total conversion time: 6 hours, 26 minutes, 18 seconds
 ```
+
 
 ## License
 
