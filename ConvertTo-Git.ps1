@@ -132,7 +132,7 @@ param(
     [string]$AccessToken = $env:TfsAccessToken,
     
     [Parameter(Mandatory=$false)]
-    [string]$LogFile = "$env:TEMP\convertto-git-$(Get-Date -Format 'yyyy-MM-dd-HHmmss').txt"
+    [string]$LogFile = "$env:TEMP\merge-branch-$(Get-Date -Format 'yyyy-MM-dd-HHmmss').txt"
 
 )
 
@@ -418,6 +418,24 @@ foreach ($cs in $sortedHistory) {
             # Tag changeset as having changes on this branch
             $branchChanges[$branchName] = $true
 
+            # Same branch, with different path
+            if ($sourceBranch -eq $branchName) {
+                $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $sourceBranch.Rewrite).TrimStart('/').Replace('/', '\')
+                if ($sourceRelativePath -ne $relativePath) {
+                    push-location $branchName
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging to self / Copy" -ForegroundColor Yellow
+                    Copy-Item -Path $sourceRelativePath -Destination $relativePath -Force   
+                    pop-location 
+                } else {
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Strange problem: Merge to self with same path" -ForegroundColor Yellow
+                    throw "Strange problem: Merge to self with same path"
+                }
+               
+                continue
+            }
+
+            #$sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $sourceBranch.Rewrite).TrimStart('/').Replace('/', '\')
+
             # This should effectively link the source branch to the target branch on specific files
             push-location $branchName
             git checkout $sourceBranch.Name -- $relativePath
@@ -462,7 +480,8 @@ foreach ($cs in $sortedHistory) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
                 $branchChanges[$branch.Name] = $true
                 $branchRelativePath = $branch.Name +'\' + $relativePath
-                $d = mkdir $branchRelativePath -ErrorAction SilentlyContinue
+                $d = mkdir $branchRelativePath -Force -ErrorAction SilentlyContinue
+                "" > "$branchRelativePath\.gitkeep"
                 continue
             }
             
