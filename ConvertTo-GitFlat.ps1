@@ -106,13 +106,6 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$OutputPath,
 
-    # The name of the TFS primary project branch and the default Git branch name
-    [Parameter(Mandatory=$false)]
-    [string]$PrimaryBranchName = "main",
-
-    [Parameter(Mandatory=$false)]
-    [int]$FromChangesetId = 0,
-
     [Parameter(Mandatory=$false, ParameterSetName="UseWindows")]
     [switch]$UseWindows,
     
@@ -129,18 +122,9 @@ param(
     [switch]$UsePAT,
 
     [Parameter(Mandatory=$false, ParameterSetName="UsePAT")]
-    [string]$AccessToken = $env:TfsAccessToken,
+    [string]$AccessToken = $env:TfsAccessToken
     
-    [Parameter(Mandatory=$false)]
-    [string]$LogFile = "$env:TEMP\convertto-git-$(Get-Date -Format 'yyyy-MM-dd-HHmmss').txt"
-
 )
-
-# Start transcript if LogFile is provided
-if ($LogFile) {
-    Start-Transcript -Path $LogFile -Append -ErrorAction SilentlyContinue
-    Write-Host "Logging to: $LogFile" -ForegroundColor Gray
-}
 
 # Check if running in Pipeline
 $isInPipeline = $env:TF_BUILD -eq "True"
@@ -200,75 +184,39 @@ if (!(Test-Path $OutputPath)) {
 
 # Initialize Git repository
 Write-Host "Initializing Git repository in $OutputPath..." -ForegroundColor Cyan
-Push-Location $OutputPath
-
-
-$branches = @{
-    
-    # The first and default branch and  way to catch all floating TFS folders
-    "$TfsProject" = @{
-        Name = $PrimaryBranchName # The name of the branch in TFS and GIT
-        TfsPath = "$TfsProject" 
-        # The tfspath will be renamed to this, prefixed with branchName for folder
-        Rewrite = ""
-    }
-
-}
-# track changes to branches, will git commit to each branch
-$branchChanges = @{}
-# find branch by path, longest to shortest
-function Get-Branch  {
-    param ($path)
-    $currentPath = $path
-    while ($currentPath -ne "") {
-        if ($branches.ContainsKey($currentPath)) {
-            return $branches[$currentPath]
-        }
-        $currentPath = $currentPath.Substring(0, $currentPath.LastIndexOf('/'))
-    }
-    throw "Unknown branch for $path"
-}
-
-# create a new branch from an existing branch
-function Add-Branch {
-    param ($fromPath, $newPath)
-
-    $branchName = $newPath.replace("/","-").Replace("$", "").Trim('-')
-    if (Test-Path $branchName) {
-        Write-Host "Branch $branchName already exists" -ForegroundColor Gray
-        return $branchName
-    }
-
-    $sourceBranch=Get-Branch($fromPath)
-    $sourceName = $sourceBranch.Name
-    Write-Host "Branch '$sourceName' ($fromPath) to '$branchName' ($newPath)" -ForegroundColor Cyan
-    $branches[$newPath] = @{
-        Name = $branchName
-
-        TfsPath = $newPath.Substring(0, $newPath.LastIndexOf('/')) # Ensure the last folder is kept
-
-        # Ensure the top root is removed
-        Rewrite = $newPath.Substring($TfsProject.Length).Trim('/')
-    }
-
-    # Create the new branch folder from source branch
-    push-location $sourceName
-    git branch $branchName
-    git worktree add "../$branchName" $branchName
-
-    pop-location
-    return $branches[$newPath]
-}
+Set-Location $OutputPath
 
 if (!(Test-Path ".git")) {
-    # Create the first main branch folder and initialize Git
-    $d=mkdir main
-    push-location main
     git init -b main
-    pop-location
+    
+    # Create .gitattributes file for proper line endings
+    $gitattributes = @"
+# Set default behavior to automatically normalize line endings
+* text=auto
+
+# Force batch scripts to always use CRLF line endings
+*.{cmd,[cC][mM][dD]} text eol=crlf
+*.{bat,[bB][aA][tT]} text eol=crlf
+
+# Force bash scripts to always use LF line endings
+*.sh text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.pdf binary
+*.xlsx binary
+*.docx binary
+*.pptx binary
+"@ 
+   # Disabled for now
+   # $gitattributes | Out-File -FilePath ".gitattributes" -Encoding utf8
+   # git add .gitattributes
+   # git commit -m "Initial commit with .gitattributes"
 }
-
-
 
 # Connect to TFS with appropriate authentication
 Write-Host "Connecting to TFS at $TfsCollection..." -ForegroundColor Cyan
@@ -323,18 +271,13 @@ try {
 
 # Get all changesets for the specified path
 Write-Host "Retrieving history for $TfsProject (this may take a while)..." -ForegroundColor Cyan
-
-$fromVersion = $null
-if ($FromChangesetId -gt 0) {
-    $fromVersion = new-object Microsoft.TeamFoundation.VersionControl.Client.ChangesetVersionSpec $FromChangesetId
-}
 $history = $vcs.QueryHistory(
     $TfsProject,
     [Microsoft.TeamFoundation.VersionControl.Client.VersionSpec]::Latest,
     0,
     [Microsoft.TeamFoundation.VersionControl.Client.RecursionType]::Full,
     $null,
-    $fromVersion,
+    $null,
     $null,
     [int]::MaxValue,    # Get all changesets
     $false, # Don't Include details yet
@@ -351,7 +294,6 @@ Write-Host "Found $totalChangesets changesets - processing from oldest to newest
 $processedChangesets = 0
 $processedFiles = 0
 
-
 # Process each changeset
 foreach ($cs in $sortedHistory) {
     $processedChangesets++
@@ -367,102 +309,32 @@ foreach ($cs in $sortedHistory) {
     
     # Get detailed changeset info
     $changeset = $vcs.GetChangeset($cs.ChangesetId)
-    $changes = $vcs.GetChangesForChangeset($cs.ChangesetId, $true,  [int]::MaxValue, $null, $null, $true)
+    $changes = $vcs.GetChangesForChangeset($cs.ChangesetId, $false,  [int]::MaxValue, $null, $null, $true)
     $changeCount = $changes.Count
     Write-Host "[TFS-$changesetId] Contains $changeCount changes" -ForegroundColor Gray
    
 
     # Process each change in the changeset
     $changeCounter=0
-
-    # Track if a branch has been created in this changeset
-    $branchCreatedRoot=""
-
-
-    
-
     foreach ($change in $changes) {
         $changeCounter++
         $changeItem = $change.Item
         $changesetId = [Int]::Parse($changeItem.ChangesetId)
         $changeType = [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]($change.ChangeType)
-        $itemType = [Microsoft.TeamFoundation.VersionControl.Client.ItemType]($changeItem.ItemType)
         $itemId= [Int]::Parse($changeItem.ItemId)
         $itemPath = $changeItem.ServerItem
-
         # Skip changes not in the specified path
         if ($itemPath.ToLower().StartsWith($TfsProject.ToLower()) -eq $false) {
-            Write-Host "[TFS-$changesetId] [UNKNOWN] [$changeCounter/$changeCount] [$changeType] $itemPath - skipping, out of project" -ForegroundColor Yellow
             continue
         }
-
-        $branch = get-branch($itemPath)
+        # Skip first $, / characters
+        $relativePath = $itemPath.Substring($TfsProject.Length).TrimStart('/').Replace('/', '\')
         
-        # Find file relative path by branch name (folder) and item path replaced with branch local path.
-        # This is the Tryll/Magic that will ensure we track the same files across branches.
-        $relativePath = $itemPath.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
-        $branchName=$branch.Name
- 
-  
-
-        # Not seen this yet, but adding to be sure we catch it and stop processing
-        if ($change.MergeSources.Count -gt 1) {
-            $change | convertto-json
-            throw "Multiple merge sources is not supported"
-        } 
-     
-        if ($change.MergeSources.Count -gt 0 -and ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
-            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging" -ForegroundColor Yellow
-            $sourceBranch = get-branch($change.MergeSources[0].ServerItem)
-
-            # Tag changeset as having changes on this branch
-            $branchChanges[$branchName] = $true
-
-            # This should effectively link the source branch to the target branch on specific files
-            push-location $branchName
-            git checkout $sourceBranch.Name -- $relativePath
-            pop-location
-            
-            continue
-        }
-             
-        # Debug out if not rename or branch, want to catch merge:
-        if ($change.MergeSources.Count -gt 0 -and !(($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) -bor ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch))) {
-            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - MergeSource > 0" -ForegroundColor Yellow
-            $change | convertto-json
-            throw "stop here"
-          }
-
-        # Handle branching
-        if ($change.MergeSources.Count -gt 0 -and $change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch) {     
-
-            $branchTest = get-branch $change.Item.ServerItem
-            # Only create new branches if new in the changeset
-            if ($branchCreatedRoot -eq "" -or $branchCreatedRoot -ne $branchTest.TfsPath) {
-                $branch = Add-Branch  $change.MergeSources[0].ServerItem $change.Item.ServerItem    
-                $branchCreatedRoot = $branch.TfsPath
-                $relativePath = $itemPath.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
-                $branchName = $branch.Name
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branched" -ForegroundColor Yellow
-            }     
-            
-        }
-
-
-        # Check if relativePath is not handled
-        if ($relativePath.StartsWith("$")) {
-            # In these scenarios we have TFS folders and paths not mapped to branches, we'll map these to the main branch.
-
-
-        }
-
         if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder -or $changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Any) {
 
             if ($relativePath -ne "") {
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
-                $branchChanges[$branch.Name] = $true
-                $branchRelativePath = $branch.Name +'\' + $relativePath
-                $d = mkdir $branchRelativePath -ErrorAction SilentlyContinue
+                Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
+                $d = mkdir $relativePath -ErrorAction SilentlyContinue
                 continue
             }
             
@@ -471,22 +343,21 @@ foreach ($cs in $sortedHistory) {
 
         # Proces changes only if htey have a file path
         if (-not [String]::IsNullOrEmpty($relativePath)) {
-            $branchRelativePath = $branch.Name +'\' + $relativePath
+          
             # Handle different change types
             switch ($change.ChangeType) {
                
                 # Remove file
                 { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete } {
 
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
-                    $branchChanges[$branch.Name] = $true
+                    Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
                     
                     # Remove the file or directory
-                    if (Test-Path $branchRelativePath) {
+                    if (Test-Path $relativePath) {
                         if (Test-Path $relativePath -PathType Container) {
-                            Remove-Item -Path $branchRelativePath -Recurse -Force
+                            Remove-Item -Path $relativePath -Recurse -Force
                         } else {
-                            Remove-Item -Path $branchRelativePath -Force
+                            Remove-Item -Path $relativePath -Force
                         }
                     }
                     break
@@ -497,12 +368,12 @@ foreach ($cs in $sortedHistory) {
                 # Default handling - Download file
                 default {
                  
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
-                    $branchChanges[$branch.Name] = $true
-                    $fullPath = Join-Path -path (pwd) -ChildPath $branchRelativePath
+                    Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
+
+                    $fullPath = Join-Path -path (pwd) -ChildPath $relativePath
                    
                     # Create directory structure
-                    $localDir = Split-Path -Path $branchRelativePath -Parent
+                    $localDir = Split-Path -Path $relativePath -Parent
                     if ($localDir -ne "" -and !(Test-Path $localDir)) {
                         New-Item -ItemType Directory -Path $localDir -Force | Out-Null
                     }
@@ -510,14 +381,15 @@ foreach ($cs in $sortedHistory) {
                     # Download the file if it's not a directory
                     if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
                         try {
-                            $changeItem.DownloadFile($fullPath)
+                            $item = $vcs.GetItem($itemId, $changesetId)
+                            $item.DownloadFile($fullPath)
                             $processedFiles++
                         } catch {
-                            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Red
+                            Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] Warning: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Yellow
                         }
                     } else {
                         $itemType=[Microsoft.TeamFoundation.VersionControl.Client.ItemType]($change.Item.ItemType)
-                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath is unhandled $itemType" -ForegroundColor Yellow
+                        Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] [$changeType] $relativePath is unhandled $itemType" -ForegroundColor Yellow
                     }
                     break
                 }
@@ -528,46 +400,35 @@ foreach ($cs in $sortedHistory) {
             }
         }
     }
-
-
-
     # Commit changes to Git
-    foreach($branch in $branchChanges.Keys) {
-        push-location $branch
-        Write-Host "[TFS-$changesetId] [$branch] Committing changeset to $branch" -ForegroundColor Gray
-        # Stage all changes
-        git add -A
-        
-        # Set environment variables for commit author and date
-        $env:GIT_AUTHOR_NAME = $changeset.OwnerDisplayName
-        $env:GIT_AUTHOR_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
-        $env:GIT_AUTHOR_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
-        $env:GIT_COMMITTER_NAME = $changeset.OwnerDisplayName
-        $env:GIT_COMMITTER_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
-        $env:GIT_COMMITTER_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
-        
-        # Prepare commit message
-        $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
-        
-        # Make the commit
-        git commit -m $commitMessage --allow-empty
-
-        # Clean up environment variables
-        Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_AUTHOR_EMAIL -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_COMMITTER_NAME -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
-
-        pop-location
-    }
+    Write-Host "[TFS-$changesetId] Committing changeset to Git" -ForegroundColor Gray
     
- 
+    # Stage all changes
+    git add -A
+    
+    # Set environment variables for commit author and date
+    $env:GIT_AUTHOR_NAME = $changeset.OwnerDisplayName
+    $env:GIT_AUTHOR_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
+    $env:GIT_AUTHOR_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
+    $env:GIT_COMMITTER_NAME = $changeset.OwnerDisplayName
+    $env:GIT_COMMITTER_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
+    $env:GIT_COMMITTER_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
+    
+    # Prepare commit message
+    $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
+    
+    # Make the commit
+    git commit -m $commitMessage --allow-empty
+    
+    # Clean up environment variables
+    Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
+    Remove-Item Env:\GIT_AUTHOR_EMAIL -ErrorAction SilentlyContinue
+    Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
+    Remove-Item Env:\GIT_COMMITTER_NAME -ErrorAction SilentlyContinue
+    Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
+    Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
     
     Write-Host "[TFS-$changesetId] Completed" -ForegroundColor Green
-    # reset and loop
-    $branchChanges = @{}
 }
 
 # Clear the progress bar
