@@ -459,11 +459,11 @@ foreach ($cs in $sortedHistory) {
                 # Ensure the mergesource is available as branch
                 $branchTest = get-branch($container)
 
-                if ($branchtTest.Name -ne $branchDirect) {
+                if ($branchtTest.TfsPath -ne $container) {
                     # Only create new branches if new in the changeset
                     $branchDorect = Add-BranchDirect($container)
                     $directBranch=$branchDorect.Name
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Direct created branch $directBranch" -ForegroundColor Yellow
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branch direct $directBranch" -ForegroundColor Yellow
                     
                     # Ensure parent is checked in
                     $branchChanges[$branchName] = $true
