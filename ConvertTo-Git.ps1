@@ -439,7 +439,7 @@ foreach ($cs in $sortedHistory) {
         $branch = get-branch($itemContainer)
         
         # If we have moved out of currentNewBranch in changeset revert to empty
-        if ($currentNewBranch -ne $branch.Name) {
+        if ($currentNewBranch.StartsWith($itemContainer) -eq $false) {
             $currentNewBranch = ""
         }
 
@@ -480,7 +480,7 @@ foreach ($cs in $sortedHistory) {
                     # Only create new branches if new in the changeset
                     $branch = Add-BranchDirect($sourceContainer)
                     $branchDirectName=$branch.Name
-                    $currentNewBranch = $branch.Name
+                    $currentNewBranch = $itemContainer
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branch direct $branchDirectName" -ForegroundColor Yellow
 
                     # Setting relative path to the new branch
@@ -499,7 +499,7 @@ foreach ($cs in $sortedHistory) {
 
                     # switch to child branch
                     $branchName = $branch.Name
-                    $currentNewBranch = $branch.Name
+                    $currentNewBranch = $itemContainer
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branched" -ForegroundColor Yellow
 
                     if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
