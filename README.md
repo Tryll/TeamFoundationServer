@@ -10,7 +10,7 @@ This repository contains PowerShell scripts that help with TFS management tasks,
 
 ## Utilities
 
-### ConvertTo-Git.ps1
+### ConvertTo-GitFlat.ps1
 
 A comprehensive TFVC to Git migration tool that accurately preserves your project history by replaying all changes chronologically, in less than 400 lines of code.
 
