@@ -277,7 +277,7 @@ function Add-BranchDirect {
         return get-branch($newContainer)
     }
     
-    Write-Host "Direct creating branch '$branchName' from '$sourceName'" -ForegroundColor Cyan
+    Write-Host "Creating branch '$branchName' from '$sourceName'" -ForegroundColor Cyan
     $branches[$fromContainer] = @{
         Name = $branchName
 
