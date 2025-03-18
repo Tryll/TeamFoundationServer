@@ -277,7 +277,7 @@ function Add-BranchDirect {
         return get-branch($newContainer)
     }
     
-    Write-Host "Creating branch '$branchName' from '$sourceName'" -ForegroundColor Cyan
+    Write-Host "Direct creating branch '$branchName' from '$sourceName'" -ForegroundColor Cyan
     $branches[$fromContainer] = @{
         Name = $branchName
 
@@ -299,7 +299,8 @@ function Add-BranchDirect {
 function Get-ItemBranch {
     param ($path, $changesetId)
 
-    $changeSet = new-object Microsoft.TeamFoundation.VersionControl.Client.ChangesetVersionSpec $changesetId
+
+    $changeSet = new-object Microsoft.TeamFoundation.VersionControl.Client.ChangesetVersionSpec -argumentlist @($changesetId)
 
     do {
         $item = new-object Microsoft.TeamFoundation.VersionControl.Client.ItemIdentifier($path,  $changeSet )
@@ -494,18 +495,17 @@ foreach ($cs in $sortedHistory) {
 
 
             # Find container, branch base path
-            $sourceContainer = $change.MergeSources[0].ServerItem
-            $sourceBranchPath =  Get-ItemBranch $sourceContainer $changesetId
+            $sourceBranchPath =  Get-ItemBranch $change.MergeSources[0].ServerItem $changesetId
             $sourceBranch = get-branch($sourceBranchPath)
 
             # Simple fix for Root
-            $tfsPath =$branch.TfsPath
+            $tfsPath = $sourceBranch.TfsPath
             if ($tfsPath -eq $TfsProject) {
                 $tfsPath+="/main"
             }
             # Check if we have a defined branch:
             if ($tfsPath -ne $sourceBranchPath) {
-                throw "Source branch path mismatch $sourceBranch.TfsPath -ne $sourceBranchPath"
+                throw "Missing branch? $tfsPath -ne $sourceBranchPath"
             }
             
             # Tag changeset as having changes on this branch
@@ -638,7 +638,6 @@ foreach ($cs in $sortedHistory) {
     Write-Host "[TFS-$changesetId] Completed" -ForegroundColor Green
     # reset and loop
     $branchChanges = @{}
-    
 }
 
 # Clear the progress bar
