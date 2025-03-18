@@ -482,7 +482,7 @@ foreach ($cs in $sortedHistory) {
                     # Ensure target is a branch
                     $target = get-branch($itemContainer)
                     if ($target.TfsPath -ne $itemContainer) {
-                        $branch = Add-BranchDirect($sourceContainer)
+                        $branch = Add-BranchDirect($itemContainer)
                         $branchDirectName=$branch.Name       
                         Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branch direct target $branchDirectName" -ForegroundColor Yellow
                     }
