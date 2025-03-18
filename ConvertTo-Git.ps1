@@ -288,7 +288,7 @@ function Add-BranchDirect {
     }
 
     # Create the new branch folder from source branch
-    push-location $source.Name
+    push-location $sourceName
     git branch $branchName
     git worktree add "../$branchName" $branchName
 
@@ -324,6 +324,7 @@ if (!(Test-Path ".git")) {
     $d=mkdir main
     push-location main
     git init -b main
+    git commit -m "init" --allow-empty
     pop-location
 }
 
@@ -458,7 +459,9 @@ foreach ($cs in $sortedHistory) {
     
         # Retrieve TFS Branch for item in changeset
         $itemBranch=  Get-ItemBranch $itemPath $changesetId
-
+        if ($itemBranch -eq $null) {
+            throw "Missing branch? $itemBranch -eq $null"
+        }
         # Check if we have a defined branch:
         $branch = get-branch($itemBranch)
         $branchName=$branch.Name 
@@ -491,13 +494,18 @@ foreach ($cs in $sortedHistory) {
 
         # Change Item: Merging
         if ($change.MergeSources.Count -gt 0 -and ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
-            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging" -ForegroundColor Yellow
-
+   
 
             # Find container, branch base path
             $sourceBranchPath =  Get-ItemBranch $change.MergeSources[0].ServerItem $changesetId
+            if ($sourceBranchPath -eq $null) {
+                throw "Missing branch? $sourceBranchPath -eq $null"
+            }
             $sourceBranch = get-branch($sourceBranchPath)
+            $sourceBranchName = $sourceBranch.Name
+            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName" -ForegroundColor Yellow
 
+            
             # Simple fix for Root
             $tfsPath = $sourceBranch.TfsPath
             if ($tfsPath -eq $TfsProject) {
@@ -507,13 +515,26 @@ foreach ($cs in $sortedHistory) {
             if ($tfsPath -ne $sourceBranchPath) {
                 throw "Missing branch? $tfsPath -ne $sourceBranchPath"
             }
-            
+           
+            $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($sourceBranch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
+            Write-Host $change.MergeSources[0].ServerItem
+            Write-Host $sourceRelativePath
             # Tag changeset as having changes on this branch
             $branchChanges[$branchName] = $true
-
+    
+            
             # This should effectively link the source branch to the target branch on specific files
             push-location $branchName
-            git checkout $sourceBranch.Name -- $relativePath
+
+            # Checkout the source file and move it to the target branch
+            if ($sourceRelativePath -ne $relativePath) {
+                git checkout $sourceBranch.Name -- $sourceRelativePath
+                git mv -f $sourceRelativePath $relativePath
+            } else {
+                git checkout $sourceBranch.Name --  $relativePath
+            }
+            
+
             pop-location
             
             continue
