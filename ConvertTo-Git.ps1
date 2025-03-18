@@ -260,7 +260,7 @@ function Add-Branch {
     return $branches[$newPath]
 }
 
-function Add-Branch-Direct {
+function Add-BranchDirect {
     param ($fromPath)
 
     $sourceBranch=Get-Branch($fromPath)
@@ -444,19 +444,28 @@ foreach ($cs in $sortedHistory) {
 
 
 
-        # Handle branching, before merging
+        # Handle branching (before merging, due to branch+merge changesets)
         if ($change.MergeSources.Count -gt 0 -and $change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch) {     
 
             # TFS Combo Barnch + Merge, creates a branch first from the MergeSource 
             if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge) {
 
-                # Ensure the mergesource is available as branch
-                $branchTest = get-branch($change.MergeSources[0].ServerItem)
+                # Find container, branch base path
+                $container = $change.MergeSources[0].ServerItem
+                if ($container.Substring(0,$container.LastIndexOf('/')).Contains('.')) {
+                    $container = Split-Path -Path $change.MergeSources[0].ServerItem -Parent
+                }
 
-                # Only create new branches if new in the changeset
-                $branchDorect = Add-Branch-Direct($change.MergeSources[0].ServerItem)
-                $directBranch=$branchDorect.Name
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Direct created branch $directBranch" -ForegroundColor Yellow
+                # Ensure the mergesource is available as branch
+                $branchTest = get-branch($container)
+
+                if ($branchtTest.Name -ne $branchDirect) {
+                    # Only create new branches if new in the changeset
+                    $branchDorect = Add-BranchDirect($container)
+                    $directBranch=$branchDorect.Name
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Direct created branch $directBranch" -ForegroundColor Yellow
+                }
+
             
             } else {
 
@@ -475,6 +484,7 @@ foreach ($cs in $sortedHistory) {
             
         }
      
+        # Handle merging
         if ($change.MergeSources.Count -gt 0 -and ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging" -ForegroundColor Yellow
             $sourceBranch = get-branch($change.MergeSources[0].ServerItem)
@@ -517,14 +527,6 @@ foreach ($cs in $sortedHistory) {
           }
 
         
-
-
-        # Check if relativePath is not handled
-        if ($relativePath.StartsWith("$")) {
-            # In these scenarios we have TFS folders and paths not mapped to branches, we'll map these to the main branch.
-
-
-        }
 
         if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder -or $changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Any) {
 
@@ -592,10 +594,6 @@ foreach ($cs in $sortedHistory) {
                     }
                     break
                 }
-                #default {
-                #    Write-Host "[TFS-$changesetId] [$changeCounter/$changeCount] Unhandled change type: $($change.ChangeType) for $relativePath" -ForegroundColor Yellow
-                #    break
-                #}
             }
         }
     }
