@@ -440,7 +440,7 @@ foreach ($cs in $sortedHistory) {
         
         # If we have moved out of currentNewBranch in changeset revert to empty
         # This will ofc fail if the changeset has a branch started on the same root, this is the limitation / not supported scenario
-        if ($currentNewBranch.StartsWith($itemContainer) -eq $false) {
+        if ($currentNewBranch -ne "" -and $currentNewBranch.StartsWith($itemContainer) -eq $false) {
             Write-Host "$currentNewBranch Branch changes complete, resetting for $itemContainer." -ForegroundColor Yellow
             $currentNewBranch = ""
         }
