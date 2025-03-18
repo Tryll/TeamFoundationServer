@@ -474,8 +474,8 @@ foreach ($cs in $sortedHistory) {
             # Create branch if it does not exist, and we're not acively processing on the same new branch
             if ($currentNewBranch -eq "" -and $branchTest.TfsPath -ne $sourceContainer) {
 
-                # TFS Combo Barnch + Merge, creates a branch first from the MergeSource 
-                if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge) {
+                # TFS Combo Branch + Merge or Branch + Encoding, creates a branch first from the MergeSource 
+                if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or $change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Encoding) {
 
                     # Only create new branches if new in the changeset
                     $branch = Add-BranchDirect($sourceContainer)
