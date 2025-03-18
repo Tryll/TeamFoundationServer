@@ -516,9 +516,8 @@ foreach ($cs in $sortedHistory) {
                 throw "Missing branch? $tfsPath -ne $sourceBranchPath"
             }
            
-            $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($sourceBranch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
-            Write-Host $change.MergeSources[0].ServerItem
-            Write-Host $sourceRelativePath
+            $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($sourceBranch.TfsPath, $sourceBranch.Rewrite).TrimStart('/').Replace('/', '\')
+
             # Tag changeset as having changes on this branch
             $branchChanges[$branchName] = $true
     
