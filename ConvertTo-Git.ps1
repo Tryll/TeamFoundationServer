@@ -492,6 +492,11 @@ foreach ($cs in $sortedHistory) {
                     # switch to child branch
                     $branchName = $branch.Name
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branched" -ForegroundColor Yellow
+
+                    if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
+                        # If this was a clean branch request, we proceed to next change item
+                        continue
+                    }
                 
                 }
             }
