@@ -219,7 +219,7 @@ $branchChanges = @{}
 # find branch by path, longest to shortest
 function Get-Branch  {
     param ($path)
-    $currentPath = $path
+    $currentPath = $path.Trim('/')
     while ($currentPath -ne "") {
         if ($branches.ContainsKey($currentPath)) {
             return $branches[$currentPath]
@@ -229,26 +229,30 @@ function Get-Branch  {
     throw "Unknown branch for $path"
 }
 
-# create a new branch from an existing branch
+# create a new branch from an existing branch, input should never be a file.
 function Add-Branch {
-    param ($fromPath, $newPath)
+    param ($fromContainer, $newContainer)
 
-    $branchName = $newPath.replace("/","-").Replace("$", "").Replace(".","-").Trim('-')
+    $newContainer = $newContainer.Trim('/')
+    $fromContainer = $fromContainer.Trim('/')
+
+    $branchName = $newContainer.replace("/","-").Replace("$", "").Replace(".","-").Trim('-')
     if (Test-Path $branchName) {
         Write-Host "Branch $branchName already exists" -ForegroundColor Gray
-        return $branchName
+        return get-branch($newContainer)
     }
 
-    $sourceBranch=Get-Branch($fromPath)
+
+    $sourceBranch = Get-Branch($fromContainer)
     $sourceName = $sourceBranch.Name
-    Write-Host "Branch '$sourceName' ($fromPath) to '$branchName' ($newPath)" -ForegroundColor Cyan
-    $branches[$newPath] = @{
+    Write-Host "Branch '$sourceName' ($fromContainer) to '$branchName' ($newContainer)" -ForegroundColor Cyan
+    $branches[$newContainer] = @{
         Name = $branchName
 
-        TfsPath = $newPath.Substring(0, $newPath.LastIndexOf('/')) # Ensure the last folder is kept
+        TfsPath = $newContainer
 
         # Ensure the top root is removed
-        Rewrite = $newPath.Substring($TfsProject.Length).Trim('/')
+        Rewrite = $newContainer.Substring($TfsProject.Length).Trim('/')
     }
 
     # Create the new branch folder from source branch
@@ -257,38 +261,39 @@ function Add-Branch {
     git worktree add "../$branchName" $branchName
 
     pop-location
-    return $branches[$newPath]
+    return $branches[$newContainer]
 }
 
+# create a new branch directly from container, input should never be a file.
 function Add-BranchDirect {
-    param ($fromPath)
+    param ($fromContainer)
+    $fromContainer = $fromContainer.Trim('/')
 
-    $sourceBranch=Get-Branch($fromPath)
-    $sourceName = $sourceBranch.Name
+    $source = get-branch($fromContainer)
 
-    $branchName = $fromPath.replace("/","-").Replace(".","-").Replace("$", "").Trim('-')
+    $branchName = $fromContainer.replace("/","-").Replace(".","-").Replace("$", "").Trim('-')
     if (Test-Path $branchName) {
         Write-Host "Branch $branchName already exists" -ForegroundColor Gray
-        return $branchName
+        return get-branch($newContainer)
     }
 
     Write-Host "Direct creating branch '$branchName'" -ForegroundColor Cyan
-    $branches[$fromPath] = @{
+    $branches[$fromContainer] = @{
         Name = $branchName
 
-        TfsPath = $fromPath.Substring(0, $newPath.LastIndexOf('/')) # Ensure the last folder is kept
+        TfsPath = $fromContainer 
 
         # Ensure the top root is removed
-        Rewrite = $fromPath.Substring($TfsProject.Length).Trim('/')
+        Rewrite = $fromContainer.Substring($TfsProject.Length).Trim('/')
     }
 
     # Create the new branch folder from source branch
-    push-location $sourceName
+    push-location $source.Name
     git branch $branchName
     git worktree add "../$branchName" $branchName
 
     pop-location
-    return $branches[$fromPath]
+    return $branches[$fromContainer]
 }
 
 if (!(Test-Path ".git")) {
@@ -406,10 +411,6 @@ foreach ($cs in $sortedHistory) {
     # Process each change in the changeset
     $changeCounter=0
 
-    # Track if a branch has been created in this changeset
-    $branchCreatedRoot=""
-
-
     
 
     foreach ($change in $changes) {
@@ -420,6 +421,11 @@ foreach ($cs in $sortedHistory) {
         $itemType = [Microsoft.TeamFoundation.VersionControl.Client.ItemType]($changeItem.ItemType)
         $itemId= [Int]::Parse($changeItem.ItemId)
         $itemPath = $changeItem.ServerItem
+        $itemContainer = $changeItem.ServerItem
+        if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
+            $itemContainer = $itemContainer.Substring(0, $itemContainer.LastIndexOf('/'))
+        }
+
 
         # Skip changes not in the specified path
         if ($itemPath.ToLower().StartsWith($TfsProject.ToLower()) -eq $false) {
@@ -427,7 +433,8 @@ foreach ($cs in $sortedHistory) {
             continue
         }
 
-        $branch = get-branch($itemPath)
+        
+        $branch = get-branch($itemContainer)
         
         # Find file relative path by branch name (folder) and item path replaced with branch local path.
         # This is the Tryll/Magic that will ensure we track the same files across branches.
@@ -446,38 +453,37 @@ foreach ($cs in $sortedHistory) {
 
         # Handle branching (before merging, due to branch+merge changesets)
         if ($change.MergeSources.Count -gt 0 -and $change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch) {     
-
-            # TFS Combo Barnch + Merge, creates a branch first from the MergeSource 
-            if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge) {
-
-                # Find container, branch base path
-                $container = $change.MergeSources[0].ServerItem
-                if ($container.Substring(0,$container.LastIndexOf('/')).Contains('.')) {
-                    $container = Split-Path -Path $change.MergeSources[0].ServerItem -Parent
-                }
-
-                # Ensure the mergesource is available as branch
-                $branchTest = get-branch($container)
-
-                if ($branchtTest.TfsPath -ne $container) {
-                    # Only create new branches if new in the changeset
-                    $branchDorect = Add-BranchDirect($container)
-                    $directBranch=$branchDorect.Name
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branch direct $directBranch" -ForegroundColor Yellow
-                    
-                    # Ensure parent is checked in
-                    $branchChanges[$branchName] = $true
-                    
-                }
-
             
-            } else {
+            
+            # Find container, branch base path
+            $sourceContainer = $change.MergeSources[0].ServerItem
+            if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
+                $sourceContainer = $sourceContainer.Substring(0, $sourceContainer.LastIndexOf('/'))
+            }
 
-                $branchTest = get-branch($change.Item.ServerItem)
-                # Only create new branches if new in the changeset
-                if ($branchCreatedRoot -eq "" -or $branchCreatedRoot -ne $branchTest.TfsPath) {
-                    $branch = Add-Branch  $change.MergeSources[0].ServerItem $change.Item.ServerItem    
-                    $branchCreatedRoot = $branch.TfsPath
+            # Ensure the mergesource is available as branch
+            $branchTest = get-branch($sourceContainer)
+
+            # Create branch if it does not exist
+            if ($branchtTest.TfsPath -ne $sourceContainer) {
+
+                # TFS Combo Barnch + Merge, creates a branch first from the MergeSource 
+                if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge) {
+
+                    # Only create new branches if new in the changeset
+                    $branch = Add-BranchDirect($sourceContainer)
+                    $branchDirectName=$branch.Name
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branch direct $branchDirectName" -ForegroundColor Yellow
+
+                    # Setting relative path to the new branch
+                    $relativePath = $itemPath.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
+                    # Ensure parent is checked in
+                    $branchChanges[$branch.Name] = $true
+                        
+                } else {
+
+                    # Normal TFS Branching (without Merge)
+                    $branch = Add-Branch $sourceContainer $itemContainer
                     $relativePath = $itemPath.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
 
                     # Ensure parent is checked in
@@ -486,7 +492,8 @@ foreach ($cs in $sortedHistory) {
                     # switch to child branch
                     $branchName = $branch.Name
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branched" -ForegroundColor Yellow
-                }   
+                
+                }
             }
             
   
@@ -496,29 +503,20 @@ foreach ($cs in $sortedHistory) {
         # Handle merging
         if ($change.MergeSources.Count -gt 0 -and ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging" -ForegroundColor Yellow
-            $sourceBranch = get-branch($change.MergeSources[0].ServerItem)
+
+
+            # Find container, branch base path
+            $sourceContainer = $change.MergeSources[0].ServerItem
+            if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
+                $sourceContainer = $sourceContainer.Substring(0, $sourceContainer.LastIndexOf('/'))
+            }
+
+            $sourceBranch = get-branch($sourceContainer)
+            Write-Host $sourceBranch.Name
             Write-Host $change.MergeSources[0].ServerItem
 
             # Tag changeset as having changes on this branch
             $branchChanges[$branchName] = $true
-
-            # Same branch, with different path
-            if ($sourceBranch -eq $branchName) {
-                $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $sourceBranch.Rewrite).TrimStart('/').Replace('/', '\')
-                if ($sourceRelativePath -ne $relativePath) {
-                    push-location $branchName
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging to self / Copy" -ForegroundColor Yellow
-                    Copy-Item -Path $sourceRelativePath -Destination $relativePath -Force   
-                    pop-location 
-                } else {
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Strange problem: Merge to self with same path" -ForegroundColor Yellow
-                    throw "Strange problem: Merge to self with same path"
-                }
-               
-                continue
-            }
-
-            #$sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $sourceBranch.Rewrite).TrimStart('/').Replace('/', '\')
 
             # This should effectively link the source branch to the target branch on specific files
             push-location $branchName
