@@ -464,6 +464,10 @@ foreach ($cs in $sortedHistory) {
                     $branchDorect = Add-BranchDirect($container)
                     $directBranch=$branchDorect.Name
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Direct created branch $directBranch" -ForegroundColor Yellow
+                    
+                    # Ensure parent is checked in
+                    $branchChanges[$branchName] = $true
+                    
                 }
 
             
@@ -475,6 +479,11 @@ foreach ($cs in $sortedHistory) {
                     $branch = Add-Branch  $change.MergeSources[0].ServerItem $change.Item.ServerItem    
                     $branchCreatedRoot = $branch.TfsPath
                     $relativePath = $itemPath.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
+
+                    # Ensure parent is checked in
+                    $branchChanges[$branchName] = $true
+
+                    # switch to child branch
                     $branchName = $branch.Name
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branched" -ForegroundColor Yellow
                 }   
