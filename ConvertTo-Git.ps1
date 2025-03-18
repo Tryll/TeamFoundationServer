@@ -638,6 +638,7 @@ foreach ($cs in $sortedHistory) {
     Write-Host "[TFS-$changesetId] Completed" -ForegroundColor Green
     # reset and loop
     $branchChanges = @{}
+    
 }
 
 # Clear the progress bar
