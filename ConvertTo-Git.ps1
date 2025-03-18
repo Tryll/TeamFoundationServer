@@ -479,14 +479,22 @@ foreach ($cs in $sortedHistory) {
                 # TFS Combo Branch + Merge or Branch + Encoding, creates a branch first from the MergeSource 
                 if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or $change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Encoding) {
 
-                    # Only create new branches if new in the changeset
-                    $branch = Add-BranchDirect($sourceContainer)
-                    $branchDirectName=$branch.Name
-                    $currentNewBranch = $itemContainer
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branch direct $branchDirectName" -ForegroundColor Yellow
+                    # Ensure target is a branch
+                    $target = get-branch($itemContainer)
+                    if ($target.TfsPath -ne $itemContainer) {
+                        $branch = Add-BranchDirect($sourceContainer)
+                        $branchDirectName=$branch.Name       
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branch direct target $branchDirectName" -ForegroundColor Yellow
+                    }
 
-                    # Setting relative path to the new branch
-                    $relativePath = $itemPath.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
+                    # Ensure source is branch
+                    $branch = Add-BranchDirect($sourceContainer)
+                    $branchDirectName=$branch.Name                   
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branch direct source $branchDirectName" -ForegroundColor Yellow
+
+                    # Assign this as "currentNewBranch"
+                    $currentNewBranch = $itemContainer
+                    
                     # Ensure parent is checked in
                     $branchChanges[$branch.Name] = $true
                         
