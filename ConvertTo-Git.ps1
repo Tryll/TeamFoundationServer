@@ -410,6 +410,8 @@ foreach ($cs in $sortedHistory) {
 
     # Process each change in the changeset
     $changeCounter=0
+    
+    $currentNewBranch=""
 
     
 
@@ -436,6 +438,11 @@ foreach ($cs in $sortedHistory) {
         
         $branch = get-branch($itemContainer)
         
+        # If we have moved out of currentNewBranch in changeset revert to empty
+        if ($currentNewBranch -ne $branch.Name) {
+            $currentNewBranch = ""
+        }
+
         # Find file relative path by branch name (folder) and item path replaced with branch local path.
         # This is the Tryll/Magic that will ensure we track the same files across branches.
         $relativePath = $itemPath.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
@@ -464,8 +471,8 @@ foreach ($cs in $sortedHistory) {
             # Ensure the mergesource is available as branch
             $branchTest = get-branch($sourceContainer)
 
-            # Create branch if it does not exist
-            if ($branchtTest.TfsPath -ne $sourceContainer) {
+            # Create branch if it does not exist, and we're not acively processing on the same new branch
+            if ($currentNewBranch -eq "" -and $branchTest.TfsPath -ne $sourceContainer) {
 
                 # TFS Combo Barnch + Merge, creates a branch first from the MergeSource 
                 if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge) {
@@ -473,6 +480,7 @@ foreach ($cs in $sortedHistory) {
                     # Only create new branches if new in the changeset
                     $branch = Add-BranchDirect($sourceContainer)
                     $branchDirectName=$branch.Name
+                    $currentNewBranch = $branch.Name
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branch direct $branchDirectName" -ForegroundColor Yellow
 
                     # Setting relative path to the new branch
@@ -491,6 +499,7 @@ foreach ($cs in $sortedHistory) {
 
                     # switch to child branch
                     $branchName = $branch.Name
+                    $currentNewBranch = $branch.Name
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Branched" -ForegroundColor Yellow
 
                     if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
