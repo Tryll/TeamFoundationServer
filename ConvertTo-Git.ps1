@@ -270,14 +270,14 @@ function Add-BranchDirect {
     $fromContainer = $fromContainer.Trim('/')
 
     $source = get-branch($fromContainer)
-
+    $sourceName = $source.Name
     $branchName = $fromContainer.replace("/","-").Replace(".","-").Replace("$", "").Trim('-')
     if (Test-Path $branchName) {
         Write-Host "Branch $branchName already exists" -ForegroundColor Gray
         return get-branch($newContainer)
     }
-
-    Write-Host "Direct creating branch '$branchName'" -ForegroundColor Cyan
+    
+    Write-Host "Direct creating branch '$branchName' from '$sourceName'" -ForegroundColor Cyan
     $branches[$fromContainer] = @{
         Name = $branchName
 
