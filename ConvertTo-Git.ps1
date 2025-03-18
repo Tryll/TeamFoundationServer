@@ -233,7 +233,7 @@ function Get-Branch  {
 function Add-Branch {
     param ($fromPath, $newPath)
 
-    $branchName = $newPath.replace("/","-").Replace("$", "").Trim('-')
+    $branchName = $newPath.replace("/","-").Replace("$", "").Replace(".","-").Trim('-')
     if (Test-Path $branchName) {
         Write-Host "Branch $branchName already exists" -ForegroundColor Gray
         return $branchName
@@ -266,7 +266,7 @@ function Add-BranchDirect {
     $sourceBranch=Get-Branch($fromPath)
     $sourceName = $sourceBranch.Name
 
-    $branchName = $fromPath.replace("/","-").Replace("$", "").Trim('-')
+    $branchName = $fromPath.replace("/","-").Replace(".","-").Replace("$", "").Trim('-')
     if (Test-Path $branchName) {
         Write-Host "Branch $branchName already exists" -ForegroundColor Gray
         return $branchName
