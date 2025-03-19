@@ -518,7 +518,7 @@ foreach ($cs in $sortedHistory) {
              # Find actual checking hash
             $sourceChangesetId = $change.MergeSources[0].VersionTo
             $sourcehash = $branchHashTracker["$sourceBranchName_$sourceChangesetId"]
-            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName[$sourceChangesetId]:$sourcehash" -ForegroundColor Gray
+            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
 
             
             # Simple fix for Root
