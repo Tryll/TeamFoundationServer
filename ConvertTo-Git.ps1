@@ -517,7 +517,11 @@ foreach ($cs in $sortedHistory) {
             $sourceBranchName = $sourceBranch.Name
              # Find actual checking hash
             $sourceChangesetId = $change.MergeSources[0].VersionTo
+            $sourceChangesetIdFrom -ne $change.MergeSources[0].VersionFrom
             $sourcehash = $branchHashTracker["$sourceBranchName_$sourceChangesetId"]
+            if ($sourceChangesetId -ne $sourceChangesetIdFrom) {
+                Write-Host "Not Implemented Warning: Merge from source range $sourceChangesetIdFrom - $sourceChangesetId" -ForegroundColor Yellow
+            }
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
 
             
