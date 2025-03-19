@@ -580,7 +580,7 @@ foreach ($cs in $sortedHistory) {
                     $tmpFileHash = Get-NormalizedHash -FilePath $tmpFileName
 
                     if ($checkedFileHash -ne $tmpFileHash) {
-                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName:$sourceRelativePath - File hash mismatch" -ForegroundColor Red
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName : $sourceRelativePath - File hash mismatch" -ForegroundColor Red
                         Write-Host $tmpFileName
                         throw "stop here"
                     }
