@@ -536,12 +536,24 @@ foreach ($cs in $sortedHistory) {
             # This should effectively link the source branch to the target branch on specific files
             push-location $branchName
 
-            # Checkout the source file and move it to the target branch
+            # Source and Destination is not the same :  Checkout the source file and move it to the target branch
             if ($sourceRelativePath -ne $relativePath) {
-                git checkout $sourceBranch.Name -- $sourceRelativePath
-                git mv -f $sourceRelativePath $relativePath
+                try {
+                    git checkout $sourceBranch.Name -- $sourceRelativePath
+                    git mv -f $sourceRelativePath $relativePath
+                } catch {
+                    $change | convertto-json
+                    throw $_
+                }
             } else {
-                git checkout $sourceBranch.Name --  $relativePath
+                try {
+                    git checkout $sourceBranch.Name --  $relativePath
+                } catch {
+                    $change | convertto-json
+                    throw $_
+                }
+                
+                
             }
 
 
