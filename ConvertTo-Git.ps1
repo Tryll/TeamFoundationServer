@@ -686,7 +686,6 @@ foreach ($cs in $sortedHistory) {
 
         $branchHashTracker["$branch_$changesetId"] = git rev-parse --short HEAD
      
-
         pop-location
     }
 
