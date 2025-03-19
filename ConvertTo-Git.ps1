@@ -450,24 +450,21 @@ foreach ($cs in $sortedHistory) {
         if ($itemBranch -eq $null) {
             throw "Missing branch? $itemBranch -eq $null"
         }
+
         # Check if we have a defined branch:
         $branch = get-branch($itemBranch)
-        $branchName=$branch.Name 
 
-      
-
-        # Simple fix for Root
+        # Check if we have a branch change:
         $tfsPath =$branch.TfsPath
         if ($tfsPath -eq $TfsProject) {
             $tfsPath+="/main"
         }
-
-        # Check if we have a branch change:
         if ($branch -eq $null -or $tfsPath -ne $itemBranch) {
             $branch = Add-Branch($itemBranch)
             $branchName=$branch.Name 
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $itemPath - Creating branch $branchName" -ForegroundColor Yellow
         }
+        $branchName=$branch.Name
 
 
         # Find file relative path by branch name (folder) and item path replaced with branch local path.
