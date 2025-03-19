@@ -679,3 +679,5 @@ Write-Host "`nNext steps:" -ForegroundColor Cyan
 Write-Host "1. Review the Git repository to ensure everything was migrated correctly" -ForegroundColor Cyan
 Write-Host "2. Add a remote: git remote add origin <your-git-repo-url>" -ForegroundColor Cyan
 Write-Host "3. Push to your Git repository: git push -u origin main" -ForegroundColor Cyan
+
+pop-location
