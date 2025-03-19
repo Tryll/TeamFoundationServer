@@ -537,17 +537,19 @@ foreach ($cs in $sortedHistory) {
             }
 
             # Quality control
-            $checkedFileHash = (get-filehash $relativePath).Hash
-            $tmpFileName="$env:TEMP\$($changeItem.ServerItem.Replace('/','\'))"
-            $changeItem.DownloadFile($tmpFileName)
-            $tmpFileHash = (get-filehash $tmpFileName).Hash
-            if ($checkedFileHash -ne $tmpFileHash) {
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName - File hash mismatch" -ForegroundColor Red
-                Write-Host $relativePath
-                Write-Host $tmpFileName
-                throw "stop here"
+            if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
+                $checkedFileHash = (get-filehash $relativePath).Hash
+                $tmpFileName="$env:TEMP\$($changeItem.ServerItem.Replace('/','\'))"
+                $changeItem.DownloadFile($tmpFileName)
+                $tmpFileHash = (get-filehash $tmpFileName).Hash
+                if ($checkedFileHash -ne $tmpFileHash) {
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName - File hash mismatch" -ForegroundColor Red
+                    Write-Host $relativePath
+                    Write-Host $tmpFileName
+                    throw "stop here"
+                }
+                remove-item $tmpFileName
             }
-            remove-item $tmpFileName
 
 
 
