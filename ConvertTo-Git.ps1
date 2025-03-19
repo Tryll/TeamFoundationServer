@@ -236,7 +236,7 @@ function Add-Branch {
     $newContainer = $newContainer.Trim('/')
     $fromContainer = $fromContainer.Trim('/')
 
-    $branchName = $newContainer.replace("/","-").Replace("$", "").Replace(".","-").Trim('-')
+    $branchName = $newContainer.Replace($TfsProject,"").replace("/","-").Replace("$", "").Replace(".","-").Replace(" ","-").Trim('-')
     if (Test-Path $branchName) {
         Write-Host "Branch $branchName already exists" -ForegroundColor Gray
         return get-branch($newContainer)
@@ -271,7 +271,7 @@ function Add-BranchDirect {
 
     $source = get-branch($fromContainer)
     $sourceName = $source.Name
-    $branchName = $fromContainer.replace("/","-").Replace(".","-").Replace("$", "").Trim('-')
+    $branchName = $newContainer.Replace($TfsProject,"").replace("/","-").Replace("$", "").Replace(".","-").Replace(" ","-").Trim('-')
     if (Test-Path $branchName) {
         Write-Host "Branch $branchName already exists" -ForegroundColor Gray
         return get-branch($newContainer)
