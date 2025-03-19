@@ -678,7 +678,7 @@ foreach ($cs in $sortedHistory) {
     # Commit changes to Git
     foreach($branch in $branchChanges.Keys) {
         push-location $branch
-        Write-Host "[TFS-$changesetId] [$branch] Committing changeset to $branch" -ForegroundColor Gray
+       
         # Stage all changes
         git add -A
         
@@ -689,7 +689,8 @@ foreach ($cs in $sortedHistory) {
         git commit -m $commitMessage --allow-empty
 
         $branchHashTracker["$branch_$changesetId"] = git rev-parse --short HEAD
-     
+        $hash=$branchHashTracker["$branch_$changesetId"]
+        Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted changes" -ForegroundColor Gray
         pop-location
     }
 
