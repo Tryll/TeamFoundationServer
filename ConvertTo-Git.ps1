@@ -203,21 +203,6 @@ Write-Host "Initializing Git repository in $OutputPath..." -ForegroundColor Cyan
 Push-Location $OutputPath
 
 
-$branches = @{
-    
-    # The first and default branch and  way to catch all floating TFS folders
-    "$TfsProject" = @{
-        Name = $PrimaryBranchName # The name of the branch in TFS and GIT
-        TfsPath = "$TfsProject" 
-        # The tfspath will be renamed to this, prefixed with branchName for folder
-        Rewrite = ""
-    }
-
-}
-# track changes to branches, will git commit to each branch
-$branchChanges = @{}
-$branchCount = 0
-
 # find branch by path, longest to shortest
 function Get-Branch  {
     param ($path)
@@ -238,7 +223,7 @@ function Add-Branch {
 
     $source = get-branch($fromContainer)
     $sourceName = $source.Name
-    $branchName = $fromContainer.Replace($TfsProject,"").replace("/","-").Replace("$", "").Replace(".","-").Replace(" ","-").Trim('-')
+    $branchName = $fromContainer.Replace($projectPath,"").replace("/","-").Replace("$", "").Replace(".","-").Replace(" ","-").Trim('-')
     if (Test-Path $branchName) {
         Write-Host "Branch $branchName already exists" -ForegroundColor Gray
         return get-branch($newContainer)
@@ -251,7 +236,7 @@ function Add-Branch {
         TfsPath = $fromContainer 
 
         # Ensure the top root is removed
-        Rewrite = $fromContainer.Substring($TfsProject.Length).Trim('/')
+        Rewrite = $fromContainer.Substring($projectPath.Length).Trim('/')
     }
 
     # Create the new branch folder from source branch
@@ -281,10 +266,9 @@ function Get-ItemBranch {
         $path = $path.SubString(0, $path.LastIndexOf('/'))
     } while ($path.Length -gt 2)
 
-    if ($path.Length -le 2) {
-        return "$TfsProject/main"
+    if ($path -eq  '$') {
+        return $null
     }
-    # just need the path of the branch
     return $path
 }
 
@@ -299,14 +283,7 @@ function Get-NormalizedHash {
     return [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace("-", "")
 }
 
-if (!(Test-Path ".git")) {
-    # Create the first main branch folder and initialize Git
-    $d=mkdir main
-    push-location main
-    git init -b main
-    git commit -m "init" --allow-empty
-    pop-location
-}
+
 
 
 
@@ -364,12 +341,45 @@ try {
 # Get all changesets for the specified path
 Write-Host "Retrieving history for $TfsProject (this may take a while)..." -ForegroundColor Cyan
 
+$project = $vcs.GetTeamProject($TfsProject)
+if ($project -eq $null) {
+    Write-Host "Error: Project $TfsProject not found" -ForegroundColor Red
+    exit 1
+}
+$projectPath=$project.ServerItem
+$projectBranch = "main"
+Write-Host "Found project $projectPath"
+
+
+# Create the first main branch folder and initialize Git
+$d=mkdir $projectBranch
+push-location $projectBranch
+git init -b $projectBranch
+git commit -m "init" --allow-empty
+pop-location
+
+$branches = @{
+    # The first and default branch and  way to catch all floating TFS folders
+    "$projectPath" = @{
+        Name = $PrimaryBranchName # The name of the branch in TFS and GIT
+        TfsPath = "$projectPath" 
+        # The tfspath will be renamed to this, prefixed with branchName for folder
+        Rewrite = ""
+    }
+
+}
+# track changes to branches, will git commit to each branch
+$branchChanges = @{}
+$branchCount = 0
+
+
+
 $fromVersion = $null
 if ($FromChangesetId -gt 0) {
     $fromVersion = new-object Microsoft.TeamFoundation.VersionControl.Client.ChangesetVersionSpec $FromChangesetId
 }
 $history = $vcs.QueryHistory(
-    $TfsProject,
+    $projectPath,
     [Microsoft.TeamFoundation.VersionControl.Client.VersionSpec]::Latest,
     0,
     [Microsoft.TeamFoundation.VersionControl.Client.RecursionType]::Full,
@@ -437,36 +447,39 @@ foreach ($cs in $sortedHistory) {
             $change | convertto-json
             throw "Multiple merge sources is not supported"
         } 
-
-        
+              
         # Skip changes not in the specified path
-        if ($itemPath.ToLower().StartsWith($TfsProject.ToLower()) -eq $false) {
+        if ($itemPath.StartsWith($projectPath) -eq $false) {
             Write-Host "[TFS-$changesetId] [UNKNOWN] [$changeCounter/$changeCount] [$changeType] $itemPath - skipping, out of project" -ForegroundColor Yellow
             continue
         }
+        if ($itemPath -eq $projectPath) {
+            continue
+        }  
     
         # Retrieve TFS Branch for item in changeset
-        $itemBranch=  Get-ItemBranch $itemPath $changesetId
-        if ($itemBranch -eq $null) {
-            throw "Missing branch? $itemBranch -eq $null"
+        $tfsBranchPath=  Get-ItemBranch $itemPath $changesetId
+        if ($tfsBranchPath -eq $null) {
+           $tfsBranchPath = "$projectPath/$projectBranch"
         }
+
 
         # Check if we have a defined branch:
-        $branch = get-branch($itemBranch)
+        $branch = get-branch($tfsBranchPath)
 
         # Check if we have a branch change:
-        $tfsPath =$branch.TfsPath
-        if ($tfsPath -eq $TfsProject) {
-            $tfsPath+="/main"
+        $gitPath =$branch.TfsPath
+        if ($gitPath -eq $projectPath) {
+            $gitPath+="/$projectBranch"
         }
-        if ($branch -eq $null -or $tfsPath -ne $itemBranch) {
-            $branch = Add-Branch($itemBranch)
+
+        if ($branch -eq $null -or $gitPath -ne $tfsBranchPath) {
+            $branch = Add-Branch($tfsBranchPath)
             $branchName=$branch.Name 
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $itemPath - Creating branch $branchName" -ForegroundColor Yellow
         }
         $branchName=$branch.Name
-
-
+        
         # Find file relative path by branch name (folder) and item path replaced with branch local path.
         # This is the magic that will ensure we track the same files across branches.
         $relativePath = $itemPath.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
@@ -478,8 +491,7 @@ foreach ($cs in $sortedHistory) {
 
         # Merging
         if ($change.MergeSources.Count -gt 0 -and ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
-   
-
+            
             # Find container, branch base path
             $sourceBranchPath =  Get-ItemBranch $change.MergeSources[0].ServerItem $changesetId
             if ($sourceBranchPath -eq $null) {
@@ -500,7 +512,7 @@ foreach ($cs in $sortedHistory) {
             
             # Simple fix for Root
             $tfsPath = $sourceBranch.TfsPath
-            if ($tfsPath -eq $TfsProject) {
+            if ($tfsPath -eq $projectPath) {
                 $tfsPath+="/main"
             }
             # Check if we have a defined branch:
@@ -515,6 +527,7 @@ foreach ($cs in $sortedHistory) {
             # DELETE: Handle if this is just a delete, we will not link the deleted source file and the target file for deletion
             if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
                 git rm -f $relativePath
+                pop-location #branch
                 continue
             }
 
@@ -555,6 +568,7 @@ foreach ($cs in $sortedHistory) {
             }
             
             # Next item!
+            pop-location #branch
             continue
         }
              
@@ -575,6 +589,7 @@ foreach ($cs in $sortedHistory) {
             # Add new directory
             New-Item -Path "$relativePath\.gitkeep" -ItemType File -Force | Out-Null
             git add "$relativePath\.gitkeep"
+            pop-location #branch
             continue
             
         }
@@ -585,6 +600,7 @@ foreach ($cs in $sortedHistory) {
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
             # Remove the file or directory
             git rm -f $relativePath
+            pop-location #branch
             continue
         }
 
@@ -610,7 +626,7 @@ foreach ($cs in $sortedHistory) {
         }
 
         
-        pop-location # Jump out of branch
+        pop-location #branch
     }
 
 
