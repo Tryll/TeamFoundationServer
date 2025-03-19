@@ -319,6 +319,16 @@ function Get-ItemBranch {
     return $path
 }
 
+function Get-NormalizedHash {
+    param ([string]$FilePath)
+    
+    # Normalize line endings and calculate hash in one go
+    $content = [System.IO.File]::ReadAllText($FilePath) -replace "`r`n", "`n"
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($content)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    return [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace("-", "")
+}
+
 if (!(Test-Path ".git")) {
     # Create the first main branch folder and initialize Git
     $d=mkdir main
@@ -538,19 +548,16 @@ foreach ($cs in $sortedHistory) {
                 $changeItem.DownloadFile($relativePath)
             } else {
                 # Quality control for the others
-                $checkedFileHash = (get-filehash $relativePath).Hash
-                $tmpFileName="$env:TEMP\$($changeItem.ServerItem.Replace('/','\'))"
+                $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
+                $tmpFileName = "$env:TEMP\$($changeItem.ServerItem.Replace('/','\'))"
                 $changeItem.DownloadFile($tmpFileName)
-                $tmpFileHash = (get-filehash $tmpFileName).Hash
+                $tmpFileHash = Get-NormalizedHash -FilePath $tmpFileName
+
                 if ($checkedFileHash -ne $tmpFileHash) {
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName - File hash mismatch" -ForegroundColor Red
-                    Write-Host $relativePath
                     Write-Host $tmpFileName
                     throw "stop here"
-                } else {
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging consistent" -ForegroundColor Gray
                 }
-                remove-item $tmpFileName
             }
 
 
