@@ -631,13 +631,7 @@ foreach ($cs in $sortedHistory) {
                     $branchChanges[$branch.Name] = $true
                     
                     # Remove the file or directory
-                    if (Test-Path $branchRelativePath) {
-                        if (Test-Path $branchRelativePath -PathType Container) {
-                            Remove-Item -Path $branchRelativePath -Recurse -Force
-                        } else {
-                            Remove-Item -Path $branchRelativePath -Force
-                        }
-                    }
+                    git rm -f $branchRelativePath
                     break
                 }
 
