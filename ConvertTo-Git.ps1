@@ -422,6 +422,7 @@ Write-Host "Found $totalChangesets changesets - processing from oldest to newest
 $processedChangesets = 0
 $processedFiles = 0
 
+$branchHashTracker = @{}
 
 # Process each changeset
 foreach ($cs in $sortedHistory) {
@@ -536,24 +537,19 @@ foreach ($cs in $sortedHistory) {
             # This should effectively link the source branch to the target branch on specific files
             push-location $branchName
 
+            # Find actual checking hash
+            $sourceChangesetId = $change.MergeSources[0].VersionTo
+            $sourcehash = $branchHashTracker["$sourceBranchName_$sourceChangesetId"]
+      
             # Source and Destination is not the same :  Checkout the source file and move it to the target branch
             if ($sourceRelativePath -ne $relativePath) {
-                try {
-                    git checkout $sourceBranch.Name -- $sourceRelativePath
-                    git mv -f $sourceRelativePath $relativePath
-                } catch {
-                    $change | convertto-json
-                    throw $_
-                }
+          
+                git checkout $sourcehash -- $sourceRelativePath
+                git mv -f $sourceRelativePath $relativePath
+        
             } else {
-                try {
-                    git checkout $sourceBranch.Name --  $relativePath
-                } catch {
-                    $change | convertto-json
-                    throw $_
-                }
-                
-                
+                git checkout $sourcehash -- $relativePath
+
             }
 
 
@@ -688,6 +684,7 @@ foreach ($cs in $sortedHistory) {
         # Make the commit
         git commit -m $commitMessage --allow-empty
 
+        $branchHashTracker["$branchName_$changesetId"] = git rev-parse HEAD
      
 
         pop-location
