@@ -583,7 +583,7 @@ foreach ($cs in $sortedHistory) {
         }
     
         # Remove file
-        { $_ -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete } {
+        if ($changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
 
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
             # Remove the file or directory
@@ -609,6 +609,7 @@ foreach ($cs in $sortedHistory) {
         } else {
             $itemType=[Microsoft.TeamFoundation.VersionControl.Client.ItemType]($change.Item.ItemType)
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath is unhandled $itemType" -ForegroundColor Yellow
+            throw("Unhandled")
         }
 
         
