@@ -524,6 +524,7 @@ foreach ($cs in $sortedHistory) {
             }
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
 
+      
             
             # Simple fix for Root
             $tfsPath = $sourceBranch.TfsPath
@@ -544,8 +545,13 @@ foreach ($cs in $sortedHistory) {
             # This should effectively link the source branch to the target branch on specific files
             push-location $branchName
 
-      
-            # Source and Destination is not the same :  Checkout the source file and move it to the target branch
+            # DELETE: Handle if this is just a delete, we will not link the deleted source file and the target file for deletion
+            if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+                git rm -f $relativePath
+                continue
+            }
+
+            # CHECKOUT: Source and Destination is not the same :  Checkout the source file and move it to the target branch
             if ($sourceRelativePath -ne $relativePath) {
           
                 git checkout $sourcehash -- $sourceRelativePath
@@ -557,7 +563,7 @@ foreach ($cs in $sortedHistory) {
             }
 
 
-            # Quality control for files ( folders should come automatically )
+            # QUALITY CONTROL: 
             if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
 
                 if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
