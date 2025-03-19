@@ -446,7 +446,7 @@ foreach ($cs in $sortedHistory) {
 
     # Process each change in the changeset
     $changeCounter=0
-    
+    $changesetId=0
         
     foreach ($change in $changes) {
         $changeCounter++
