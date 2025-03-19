@@ -543,8 +543,6 @@ foreach ($cs in $sortedHistory) {
                 Write-Host $relativePath
                 Write-Host $tmpFileName
                 throw "stop here"
-            } else {
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging consistent" -ForegroundColor Gray
             }
             remove-item $tmpFileName
 
