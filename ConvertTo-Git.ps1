@@ -684,7 +684,7 @@ foreach ($cs in $sortedHistory) {
         # Make the commit
         git commit -m $commitMessage --allow-empty
 
-        $branchHashTracker["$branch_$changesetId"] = git rev-parse HEAD
+        $branchHashTracker["$branch_$changesetId"] = git rev-parse --short HEAD
      
 
         pop-location
