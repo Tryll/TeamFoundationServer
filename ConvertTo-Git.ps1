@@ -517,8 +517,8 @@ foreach ($cs in $sortedHistory) {
             $sourceBranchName = $sourceBranch.Name
              # Find actual checking hash
             $sourceChangesetId = $change.MergeSources[0].VersionTo
-            $sourceChangesetIdFrom -ne $change.MergeSources[0].VersionFrom
-            $sourcehash = $branchHashTracker["$sourceBranchName_$sourceChangesetId"]
+            $sourceChangesetIdFrom = $change.MergeSources[0].VersionFrom
+            $sourcehash = $branchHashTracker["$sourceBranchName-$sourceChangesetId"]
             if ($sourceChangesetId -ne $sourceChangesetIdFrom) {
                 Write-Host "Not Implemented Warning: Merge from source range $sourceChangesetIdFrom - $sourceChangesetId" -ForegroundColor Yellow
             }
@@ -688,8 +688,8 @@ foreach ($cs in $sortedHistory) {
         # Make the commit
         git commit -m $commitMessage --allow-empty
 
-        $branchHashTracker["$branch_$changesetId"] = git rev-parse --short HEAD
-        $hash=$branchHashTracker["$branch_$changesetId"]
+        $branchHashTracker["$branch-$changesetId"] = git rev-parse --short HEAD
+        $hash=$branchHashTracker["$branch-$changesetId"]
         Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted changes" -ForegroundColor Gray
         pop-location
     }
