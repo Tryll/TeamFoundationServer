@@ -543,22 +543,29 @@ foreach ($cs in $sortedHistory) {
                 git checkout $sourceBranch.Name --  $relativePath
             }
 
-            # Edit at the time of merge also uploads a new file..
-            if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
-                $changeItem.DownloadFile($relativePath)
-            } else {
-                # Quality control for the others
-                $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
-                $tmpFileName = "$env:TEMP\$($changeItem.ServerItem.Replace('/','\'))"
-                $changeItem.DownloadFile($tmpFileName)
-                $tmpFileHash = Get-NormalizedHash -FilePath $tmpFileName
 
-                if ($checkedFileHash -ne $tmpFileHash) {
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName - File hash mismatch" -ForegroundColor Red
-                    Write-Host $tmpFileName
-                    throw "stop here"
+            # Quality control for files ( folders should come automatically )
+            if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
+
+                if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
+               
+                    $changeItem.DownloadFile($relativePath)
+
+                } else {
+            
+                    $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
+                    $tmpFileName = "$env:TEMP\$($changeItem.ServerItem.Replace('/','\'))"
+                    $changeItem.DownloadFile($tmpFileName)
+                    $tmpFileHash = Get-NormalizedHash -FilePath $tmpFileName
+
+                    if ($checkedFileHash -ne $tmpFileHash) {
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName - File hash mismatch" -ForegroundColor Red
+                        Write-Host $tmpFileName
+                        throw "stop here"
+                    }
                 }
             }
+            
 
 
 
