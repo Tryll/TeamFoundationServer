@@ -323,7 +323,8 @@ function Get-NormalizedHash {
     param ([string]$FilePath)
     
     # Normalize line endings and calculate hash in one go
-    $content = [System.IO.File]::ReadAllText($FilePath) -replace "`r`n", "`n"
+    $fullPath = Resolve-Path -Path $FilePath | Select-Object -ExpandProperty Path
+    $content = [System.IO.File]::ReadAllText($fullPath) -replace "`r`n", "`n"
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($content)
     $sha = [System.Security.Cryptography.SHA256]::Create()
     return [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace("-", "")
