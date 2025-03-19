@@ -145,9 +145,6 @@ if ($LogFile) {
 # Check if running in Pipeline
 $isInPipeline = $env:TF_BUILD -eq "True"
 
-# Enable long file paths (currently limted to 255)
-git config --system core.longpaths true
-git config --global core.longpaths true
 
 # Check if required .NET assemblies are available
 $vsPath = @(
@@ -536,8 +533,11 @@ foreach ($cs in $sortedHistory) {
                 git checkout $sourceBranch.Name --  $relativePath
             }
 
-            # Quality control
-            if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
+            # Edit at the time of merge also uploads a new file..
+            if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
+                $changeItem.DownloadFile($relativePath)
+            } else {
+                # Quality control for the others
                 $checkedFileHash = (get-filehash $relativePath).Hash
                 $tmpFileName="$env:TEMP\$($changeItem.ServerItem.Replace('/','\'))"
                 $changeItem.DownloadFile($tmpFileName)
@@ -547,6 +547,8 @@ foreach ($cs in $sortedHistory) {
                     Write-Host $relativePath
                     Write-Host $tmpFileName
                     throw "stop here"
+                } else {
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging consistent" -ForegroundColor Gray
                 }
                 remove-item $tmpFileName
             }
@@ -652,8 +654,6 @@ foreach ($cs in $sortedHistory) {
         Write-Host "[TFS-$changesetId] [$branch] Committing changeset to $branch" -ForegroundColor Gray
         # Stage all changes
         git add -A
-        
-
         
         # Prepare commit message
         $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
