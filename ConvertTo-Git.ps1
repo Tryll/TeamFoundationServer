@@ -145,6 +145,9 @@ if ($LogFile) {
 # Check if running in Pipeline
 $isInPipeline = $env:TF_BUILD -eq "True"
 
+# Enable long file paths (currently limted to 255)
+git config --system core.longpaths true
+git config --global core.longpaths true
 
 # Check if required .NET assemblies are available
 $vsPath = @(
