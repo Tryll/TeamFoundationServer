@@ -520,7 +520,7 @@ foreach ($cs in $sortedHistory) {
             $sourceChangesetIdFrom = $change.MergeSources[0].VersionFrom
             $sourcehash = $branchHashTracker["$sourceBranchName-$sourceChangesetId"]
             if ($sourceChangesetId -ne $sourceChangesetIdFrom) {
-                Write-Host "Not Implemented Warning: Merge from source range $sourceChangesetIdFrom - $sourceChangesetId" -ForegroundColor Yellow
+                Write-Host "Not Implemented: Source range merge $sourceChangesetIdFrom - $sourceChangesetId, using top range only for now." -ForegroundColor Yellow
             }
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
 
@@ -553,9 +553,11 @@ foreach ($cs in $sortedHistory) {
 
             # CHECKOUT: Source and Destination is not the same :  Checkout the source file and move it to the target branch
             if ($sourceRelativePath -ne $relativePath) {
-          
+                $backupHead = git rev-parse --short HEAD 
                 git checkout $sourcehash -- $sourceRelativePath
                 git mv -f $sourceRelativePath $relativePath
+                # revert the original sourcerelativePath
+                git checkout $backupHead -- $sourceRelativePath
         
             } else {
                 git checkout $sourcehash -- $relativePath
@@ -573,12 +575,12 @@ foreach ($cs in $sortedHistory) {
                 } else {
             
                     $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
-                    $tmpFileName = "$env:TEMP\$($changeItem.ServerItem.Replace('/','\'))"
+                    $tmpFileName = "$env:TEMP\$relativePath"
                     $changeItem.DownloadFile($tmpFileName)
                     $tmpFileHash = Get-NormalizedHash -FilePath $tmpFileName
 
                     if ($checkedFileHash -ne $tmpFileHash) {
-                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName - File hash mismatch" -ForegroundColor Red
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName:$sourceRelativePath - File hash mismatch" -ForegroundColor Red
                         Write-Host $tmpFileName
                         throw "stop here"
                     }
