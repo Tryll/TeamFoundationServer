@@ -503,7 +503,7 @@ foreach ($cs in $sortedHistory) {
             }
             $sourceBranch = get-branch($sourceBranchPath)
             $sourceBranchName = $sourceBranch.Name
-            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName" -ForegroundColor Yellow
+            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName" -ForegroundColor Gray
 
             
             # Simple fix for Root
@@ -532,7 +532,23 @@ foreach ($cs in $sortedHistory) {
             } else {
                 git checkout $sourceBranch.Name --  $relativePath
             }
-            
+
+            # Quality control
+            $checkedFileHash = (get-filehash $relativePath).Hash
+            $tmpFileName="$env:TEMP\$($changeItem.ServerItem.Replace('/','\'))"
+            $changeItem.DownloadFile($tmpFileName)
+            $tmpFileHash = (get-filehash $tmpFileName).Hash
+            if ($checkedFileHash -ne $tmpFileHash) {
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName - File hash mismatch" -ForegroundColor Red
+                Write-Host $relativePath
+                Write-Host $tmpFileName
+                throw "stop here"
+            } else {
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging consistent" -ForegroundColor Gray
+            }
+            remove-item $tmpFileName
+
+
 
             pop-location
             
