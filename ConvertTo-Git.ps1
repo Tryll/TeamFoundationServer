@@ -515,7 +515,10 @@ foreach ($cs in $sortedHistory) {
             }
             $sourceBranch = get-branch($sourceBranchPath)
             $sourceBranchName = $sourceBranch.Name
-            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName" -ForegroundColor Gray
+             # Find actual checking hash
+            $sourceChangesetId = $change.MergeSources[0].VersionTo
+            $sourcehash = $branchHashTracker["$sourceBranchName_$sourceChangesetId"]
+            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from $sourceBranchName[$sourceChangesetId]:$sourcehash" -ForegroundColor Gray
 
             
             # Simple fix for Root
@@ -537,9 +540,6 @@ foreach ($cs in $sortedHistory) {
             # This should effectively link the source branch to the target branch on specific files
             push-location $branchName
 
-            # Find actual checking hash
-            $sourceChangesetId = $change.MergeSources[0].VersionTo
-            $sourcehash = $branchHashTracker["$sourceBranchName_$sourceChangesetId"]
       
             # Source and Destination is not the same :  Checkout the source file and move it to the target branch
             if ($sourceRelativePath -ne $relativePath) {
