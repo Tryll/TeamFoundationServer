@@ -553,15 +553,17 @@ foreach ($cs in $sortedHistory) {
             }
 
 
-            # QUALITY CONTROL: 
+       
             if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
 
+                # EDIT DOWNLOAD file checked in:
                 if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
                
                     $changeItem.DownloadFile($relativePath)
 
                 } else {
-            
+
+                # QUALITY CONTROL: 
                     $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
                     $tmpFileName = "$env:TEMP\$relativePath"
                     $changeItem.DownloadFile($tmpFileName)
