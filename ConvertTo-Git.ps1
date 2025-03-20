@@ -533,9 +533,7 @@ foreach ($cs in $sortedHistory) {
 
             # CHECKOUT: Source and Destination is not the same :  Checkout the source file and move it to the target branch
             if ($sourceRelativePath -ne $relativePath) {
-                $backupHead = git rev-parse HEAD 
-                 git checkout $sourcehash -- $sourceRelativePath
-                
+                $backupHead = git rev-parse HEAD                 
                 # Git checkout from file failes from time to time, forcing a recursive look for the file first to trigger cache update
                 $commits = git rev-list --all -- $sourceRelativePath
                 git checkout $sourcehash -- $sourceRelativePath
