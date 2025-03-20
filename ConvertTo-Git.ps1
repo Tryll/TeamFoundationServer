@@ -181,7 +181,10 @@ function Add-Branch {
     push-location $sourceName
     git branch $branchName
     git worktree add "../$branchName" $branchName
-
+    $succeeded = $?
+    if (-not $succeeded) {
+        throw ("Work tree creation failed, to long paths? ")
+    }
     pop-location
 
     $branchCount++
