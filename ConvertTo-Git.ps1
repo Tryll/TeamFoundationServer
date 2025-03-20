@@ -576,7 +576,7 @@ foreach ($cs in $sortedHistory) {
                 Write-Host "relativePath"
                 dir $relativePath -erroraction SilentlyContinue
                 # Ensure target is removed
-                ri $relativePath -recurse -force
+                ri $relativePath -recurse -force -erroraction SilentlyContinue
                 git mv -fv $sourceRelativePath $relativePath
                 # revert the original sourcerelativePath
                 git checkout -f $backupHead -- $sourceRelativePath
