@@ -627,29 +627,43 @@ foreach ($cs in $sortedHistory) {
             continue
         }
 
-        # Commit/PUT file:
-        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
-
+  
         # Download the file if it's not a directory
-        if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
-            if ($change.MergeSources.Count -gt 0) {
-                $change.MergeSources | convertto-json
-            }
-
-            try {
-                # Create directory structure and empty file
-                $target = New-Item -Path $relativePath -ItemType File -Force
-                $changeItem.DownloadFile($target.FullName)
-                git add $relativePath
-                $processedFiles++
-            } catch {
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Red
-            }
-        } else {
+        if ($change.Item.ItemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
             $itemType=[Microsoft.TeamFoundation.VersionControl.Client.ItemType]($change.Item.ItemType)
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath is unhandled $itemType" -ForegroundColor Yellow
             throw("Unhandled")
         }
+
+        # Handle rename where it exists
+        if ($change.MergeSources.Count -gt 0 -and $changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
+            
+            $sourcePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
+            git mv -f $sourcePath $relativePath
+            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Renamed from $sourcePath" -ForegroundColor Gray
+            # Next item!
+            pop-location #branch
+
+        }
+
+        # Commit/PUT file:
+        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
+
+        if ($change.MergeSources.Count -gt 0) {
+            # If we still have a source dump it 
+            $change.MergeSources | convertto-json
+        }
+
+        try {
+            # Create directory structure and empty file
+            $target = New-Item -Path $relativePath -ItemType File -Force
+            $changeItem.DownloadFile($target.FullName)
+            git add $relativePath
+            $processedFiles++
+        } catch {
+            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Red
+        }
+  
 
         # Next item!
         pop-location #branch
