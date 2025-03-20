@@ -139,7 +139,7 @@ param(
 
 # Support functions
 # ********************************
-.region SupportFunctions
+#region SupportFunctions
 
 # find branch by path, longest to shortest
 function Get-Branch  {
@@ -221,7 +221,7 @@ function Get-NormalizedHash {
     return [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace("-", "")
 }
 
-.endregion
+#endregion
 
 
 
