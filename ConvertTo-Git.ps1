@@ -132,7 +132,7 @@ param(
     [string]$AccessToken = $env:TfsAccessToken,
     
     [Parameter(Mandatory=$false)]
-    [string]$LogFile = "$env:TEMP\merge-branch-$(Get-Date -Format 'yyyy-MM-dd-HHmmss').txt"
+    [string]$LogFile = "$env:TEMP\convertto-git-$(Get-Date -Format 'yyyy-MM-dd-HHmmss').txt"
 
 )
 
