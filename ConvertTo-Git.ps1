@@ -569,6 +569,9 @@ foreach ($cs in $sortedHistory) {
                 throw "Failed git checkout"
             }
 
+            # Make sure it is staged, for git move to work
+            git add $sourceRelativePath
+
             # CHECKOUT RENAME: Source and Destination is not the same :
             if ($sourceRelativePath -ne $relativePath) {
                 Write-Host "Source relative"
@@ -578,6 +581,7 @@ foreach ($cs in $sortedHistory) {
                 # Ensure target is removed
                 ri $relativePath -recurse -force -erroraction SilentlyContinue
                 git mv -fv $sourceRelativePath $relativePath
+
                 # revert the original sourcerelativePath
                 git checkout -f $backupHead -- $sourceRelativePath
             }
