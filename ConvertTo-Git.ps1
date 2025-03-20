@@ -695,8 +695,8 @@ foreach ($cs in $sortedHistory) {
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
 
             try {
-              
-                Ensure-ItemDirectory $itemType $relativePath
+                # Creates the target file and directory structure
+                $target = New-Item -Path $relativePath -ItemType File -Force
 
                 $changeItem.DownloadFile($target.FullName)
 
