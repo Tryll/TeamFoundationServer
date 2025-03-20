@@ -326,6 +326,8 @@ foreach ($cs in $sortedHistory) {
     $processedChangesets++
     $changesetId=$cs.ChangesetId
     $progressPercent = [math]::Round(($processedChangesets / $totalChangesets) * 100, 2)
+
+    # Display / Progress updates
     if ($isInPipeline) {
         Write-Host "##vso[task.setprogress value=$progressPercent;]Changeset $changesetId # $processedChangesets / $totalChangesets ($progressPercent%)"
     } else {
