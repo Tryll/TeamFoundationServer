@@ -751,9 +751,11 @@ foreach ($cs in $sortedHistory) {
 
         foreach($file in $qcBranchFileMap[$branch]) {
             $fileExists = git ls-tree $branchHead $file
-            if (-not $fileExists) {
-                Write-Host "File $file exists in branch $branch"
-                throw("file not actually present")
+            if ($fileExists) {
+                Write-Host "[$branch] [$branchHead] $file - Commit ok"
+            } else {
+                Write-Host "[$branch] [$branchHead] $file - Commit FAIL"
+                throw("file not present")
             }
         }
 
