@@ -274,6 +274,7 @@ git init -b $projectBranch
 git commit -m "init" --allow-empty
 pop-location
 
+# Track all branches, with default branch first:
 $branches = @{
     # The first and default branch and  way to catch all floating TFS folders
     "$projectPath" = @{
@@ -289,11 +290,12 @@ $branchChanges = @{}
 $branchCount = 0
 
 
-
 $fromVersion = $null
 if ($FromChangesetId -gt 0) {
     $fromVersion = new-object Microsoft.TeamFoundation.VersionControl.Client.ChangesetVersionSpec $FromChangesetId
 }
+
+# DOWNLOAD all TFS Project history
 $history = $vcs.QueryHistory(
     $projectPath,
     [Microsoft.TeamFoundation.VersionControl.Client.VersionSpec]::Latest,
