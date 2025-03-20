@@ -555,7 +555,7 @@ foreach ($cs in $sortedHistory) {
             $backupHead = git rev-parse HEAD  
             # Git checkout from hashes failes from time to time, forcing a recursive look for the file first to trigger cache update
             pwd
-            Write-Host "Potentials"
+            Write-Host "Potentials for $sourceRelativePath"
             git rev-list --all -- $sourceRelativePath
 
             type .git
