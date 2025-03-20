@@ -573,7 +573,7 @@ foreach ($cs in $sortedHistory) {
             }
 
             # Register for Quality Control 
-            $qcBranchFileMap[$branchName] = $relativePath
+            $qcBranchFileMap[$branchName] += $relativePath
 
        
             if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
@@ -623,7 +623,7 @@ foreach ($cs in $sortedHistory) {
             git add "$relativePath\.gitkeep"
 
             # Register for Quality Control 
-            $qcBranchFileMap[$branchName] = "$relativePath\.gitkeep"
+            $qcBranchFileMap[$branchName] += "$relativePath\.gitkeep"
 
             # Next item!
             pop-location #branch
@@ -671,7 +671,7 @@ foreach ($cs in $sortedHistory) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Renamed from $sourcePath" -ForegroundColor Gray
 
                 # Register for Quality Control 
-                $qcBranchFileMap[$branchName] = $relativePath
+                $qcBranchFileMap[$branchName] += $relativePath
             
                 $handled = $true
             } 
@@ -700,7 +700,7 @@ foreach ($cs in $sortedHistory) {
                 $processedFiles++
 
                 # Register for Quality Control 
-                $qcBranchFileMap[$branchName] = $relativePath
+                $qcBranchFileMap[$branchName] += $relativePath
             } catch {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Red
             }
