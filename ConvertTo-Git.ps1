@@ -539,7 +539,7 @@ foreach ($cs in $sortedHistory) {
                 git checkout $sourcehash -- $sourceRelativePath
                 $checkoutSucceeded = $?
                 if (-not $checkoutSucceeded) {
-                    Write-Output "Available commits for this file:"
+                    Write-Output "Available commits for $sourceRelativePath:"
                     $commits | ForEach-Object { Write-Output $_ }
                     throw "Failed git checkout"
                 }
