@@ -528,7 +528,7 @@ foreach ($cs in $sortedHistory) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging - ignoring container operations" -ForegroundColor Gray
                 # Next item!
                 pop-location
-                continue;
+                continue
             }
 
 
@@ -590,7 +590,7 @@ foreach ($cs in $sortedHistory) {
                 #move-item -path "$sourceRelativePath" -Destination "$relativePath" -force -verbose -erroraction Continue
                 #git rm --cached "$sourceRelativePath"
                 #git add "$relativePath"
-                
+
                 # This does not work consistently.... Maybe it works better without folders
                 git mv -fv "$sourceRelativePath" "$relativePath"
 
