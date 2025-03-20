@@ -538,7 +538,7 @@ foreach ($cs in $sortedHistory) {
                 $commits = git rev-list --all -- $sourceRelativePath
                 git checkout $sourcehash -- $sourceRelativePath
                 $checkoutSucceeded = $?
-                if (-not $checkoutSucceded) {
+                if (-not $checkoutSucceeded) {
                     Write-Output "Available commits for this file:"
                     $commits | ForEach-Object { Write-Output $_ }
                     throw "Failed git checkout"
