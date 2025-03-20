@@ -233,7 +233,7 @@ function Ensure-ItemDirectory {
     } else {
         $itemFolder = (Split-Path -Path $relativePath -Parent)
     } 
-
+    # Create directory if it does not exist
     if (-not (Test-Path -Path $itemFolder)) {
         New-Item -Path (Join-Path $itemFolder '.gitkeep') -ItemType File -Force | Out-Null
     }
