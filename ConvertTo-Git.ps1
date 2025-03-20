@@ -618,6 +618,12 @@ foreach ($cs in $sortedHistory) {
         # Remove file
         if ($changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
 
+            # Some debugging
+            if ($change.MergeSources.Count -gt 0) {
+                # If we still have a source dump it 
+                $change.MergeSources | convertto-json
+            }
+
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
             # Remove the file or directory
             git rm -f $relativePath
@@ -635,37 +641,51 @@ foreach ($cs in $sortedHistory) {
             throw("Unhandled")
         }
 
-        # Handle rename where it exists
-        if ($change.MergeSources.Count -gt 0 -and $changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
-            if ($change.MergeSources[0].VersionTo -ne $changesetId) {
-                throw ("local rename from another branch? not possible? $changesetId -ne $($change.MergeSources[0].VersionTo)")
-            }   
-            $sourcePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
-            git mv -f $sourcePath $relativePath
-            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Renamed from $sourcePath" -ForegroundColor Gray
-            # Next item!
-            pop-location #branch
-            continue
+        # Handle rename where it exists, allow it to continue to Edit if that is also requested
+        $handled =$false
+        if ($changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
+
+            if ($change.MergeSources.Count -gt 0) {
+                if ($change.MergeSources[0].VersionTo -ne $changesetId) {
+                    throw ("local rename from another branch? not possible? $changesetId -ne $($change.MergeSources[0].VersionTo)")
+                }   
+                $sourcePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
+                git mv -f $sourcePath $relativePath
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Renamed from $sourcePath" -ForegroundColor Gray
+                $handled = $true
+            } 
+           
+        } else {
+            # Some debugging
+            if ($change.MergeSources.Count -gt 0) {
+                # If we still have a source dump it 
+                $change.MergeSources | convertto-json
+            }
+    
         }
 
-        # Commit/PUT file:
-        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
+    
+        if ($changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -or 
+            $changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add) {
+            # Commit/PUT file:
+            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
 
-        if ($change.MergeSources.Count -gt 0) {
-            # If we still have a source dump it 
-            $change.MergeSources | convertto-json
-        }
+            try {
+                # Create directory structure and empty file
+                $target = New-Item -Path $relativePath -ItemType File -Force
+                $changeItem.DownloadFile($target.FullName)
+                git add $relativePath
+                $processedFiles++
+            } catch {
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Red
+            }
+            $handled = $true
+        } 
 
-        try {
-            # Create directory structure and empty file
-            $target = New-Item -Path $relativePath -ItemType File -Force
-            $changeItem.DownloadFile($target.FullName)
-            git add $relativePath
-            $processedFiles++
-        } catch {
-            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Red
+        if (-not $handled) {
+            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath : Not handled" -ForegroundColor Red
+            throw ("NOT HANDLED")
         }
-  
 
         # Next item!
         pop-location #branch
