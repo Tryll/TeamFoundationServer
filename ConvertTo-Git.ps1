@@ -567,7 +567,7 @@ foreach ($cs in $sortedHistory) {
 
                 # EDIT DOWNLOAD file checked in:
                 if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
-               
+                    
                     $changeItem.DownloadFile($relativePath)
 
                 } else {
@@ -637,13 +637,15 @@ foreach ($cs in $sortedHistory) {
 
         # Handle rename where it exists
         if ($change.MergeSources.Count -gt 0 -and $changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
-            
+            if ($change.MergeSources[0].VersionTo -ne $changesetId) {
+                throw ("local rename from another branch? not possible? $changesetId -ne $($change.MergeSources[0].VersionTo)")
+            }   
             $sourcePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
             git mv -f $sourcePath $relativePath
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Renamed from $sourcePath" -ForegroundColor Gray
             # Next item!
             pop-location #branch
-
+            continue
         }
 
         # Commit/PUT file:
