@@ -574,7 +574,7 @@ foreach ($cs in $sortedHistory) {
                 Write-Host "Source relative"
                 dir $sourceRelativePath
                 Write-Host "relativePath"
-                dir $relativePath
+                dir $relativePath -erroraction SilentlyContinue
                 # Ensure target is removed
                 ri $relativePath -recurse -force
                 git mv -fv $sourceRelativePath $relativePath
