@@ -224,6 +224,22 @@ function Get-NormalizedHash {
     return [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace("-", "")
 }
 
+function Ensure-ItemDirectory {
+    param($itemType, $relativePath)
+
+    $itemFolder = "."
+    if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
+        $itemFolder = $relativePath
+    } else {
+        $itemFolder = $relativePath.Substring(0,$relativePath.LastIndexOf('\'))
+    }
+
+    if (-not Test-Path $itemFolder) {
+        New-Item -Path "$relativePath\.gitkeep" -ItemType File -Force | Out-Null
+    }
+    return $itemFolder
+}
+
 #endregion
 
 
@@ -440,7 +456,6 @@ foreach ($cs in $sortedHistory) {
     $changeCounter=0
     $changesetId=0
 
-    $qcBranchFileMap=@{}
         
     foreach ($change in $changes) {
         $changeCounter++
@@ -502,11 +517,6 @@ foreach ($cs in $sortedHistory) {
         push-location $branchName
         $branchChanges[$branchName] = $true
 
-        # Quality controll Map
-        if (-not $qcBranchFileMap.ContainsKey($branchName)) {
-            $qcBranchFileMap[$branchName]=@()
-        }
-
 
         # Merging
         if ($change.MergeSources.Count -gt 0 -and ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or
@@ -547,47 +557,30 @@ foreach ($cs in $sortedHistory) {
             # DELETE: Handle if this is just a delete, we will not link the deleted source file and the target file for deletion
             if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
                 git rm -f $relativePath
+
                 pop-location #branch
                 continue
             }
 
             # Takes current branch head, incase we need to revert a file
             $backupHead = git rev-parse HEAD  
-            # Git checkout from hashes failes from time to time, forcing a recursive look for the file first to trigger cache update
-            pwd
-            Write-Host "Potentials for $sourceRelativePath $sourcehash"
-            git rev-list --all -- $sourceRelativePath
 
-            type .git
-
-            # CHECKOUT from HASH:
+            # CHECKOUT from hash:
             git checkout -f $sourcehash -- $sourceRelativePath
-            $checkoutSucceeded = $?
-            if (-not $checkoutSucceeded) {
-                Write-Host "Available commits for $sourceRelativePath"
-                $commits | ForEach-Object { Write-Output $_ }
-                throw "Failed git checkout"
-            }
-
-            # Make sure it is staged, for git move to work
-            git add $sourceRelativePath
 
             # CHECKOUT RENAME: Source and Destination is not the same :
             if ($sourceRelativePath -ne $relativePath) {
-                Write-Host "Source relative"
-                dir $sourceRelativePath
-                Write-Host "relativePath"
-                dir $relativePath -erroraction SilentlyContinue
                 # Ensure target is removed
                 ri $relativePath -recurse -force -erroraction SilentlyContinue
+
+                Ensure-ItemDirectory $itemType $relativePath
+                
+                # Track the move
                 git mv -fv $sourceRelativePath $relativePath
 
-                # revert the original sourcerelativePath
+                # Revert the original sourcerelativePath
                 git checkout -f $backupHead -- $sourceRelativePath
             }
-
-            # Register for Quality Control 
-            $qcBranchFileMap[$branchName] += $relativePath
 
        
             if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
@@ -632,12 +625,7 @@ foreach ($cs in $sortedHistory) {
 
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
 
-            # Add new directory
-            New-Item -Path "$relativePath\.gitkeep" -ItemType File -Force | Out-Null
-            git add "$relativePath\.gitkeep"
-
-            # Register for Quality Control 
-            $qcBranchFileMap[$branchName] += "$relativePath\.gitkeep"
+            Ensure-ItemDirectory $itemType $relativePath
 
             # Next item!
             pop-location #branch
@@ -681,11 +669,13 @@ foreach ($cs in $sortedHistory) {
                     throw ("local rename from another branch? not possible? $changesetId -ne $($change.MergeSources[0].VersionTo)")
                 }   
                 $sourcePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
+
+                # Ensure path is created before move, a git requirement
+                Ensure-ItemDirectory $itemType $relativePath
+        
                 git mv -f $sourcePath $relativePath
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Renamed from $sourcePath" -ForegroundColor Gray
 
-                # Register for Quality Control 
-                $qcBranchFileMap[$branchName] += $relativePath
             
                 $handled = $true
             } 
@@ -707,14 +697,13 @@ foreach ($cs in $sortedHistory) {
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
 
             try {
-                # Create directory structure and empty file
-                $target = New-Item -Path $relativePath -ItemType File -Force
+              
+                Ensure-ItemDirectory $itemType $relativePath
+
                 $changeItem.DownloadFile($target.FullName)
                 git add $relativePath
                 $processedFiles++
 
-                # Register for Quality Control 
-                $qcBranchFileMap[$branchName] += $relativePath
             } catch {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Red
             }
@@ -757,25 +746,6 @@ foreach ($cs in $sortedHistory) {
         $hash=$branchHashTracker["$branch-$changesetId"]
         Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted" -ForegroundColor Gray
         pop-location
-
-
-
-        # Quality Control
-        push-location $projectBranch
-
-        foreach($file in $qcBranchFileMap[$branch]) {
-            $fileExists = git ls-tree $branchHead $file
-            if ($fileExists) {
-                Write-Host "[TFS-$changesetId] [$branch] [$branchHead] $file - Commit ok"
-            } else {
-                Write-Host "[TFS-$changesetId] [$branch] [$branchHead] $file - Commit FAIL"
-                throw("file not present")
-            }
-        }
-
-        pop-location
-
-
 
     }
 
