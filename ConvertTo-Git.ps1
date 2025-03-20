@@ -552,8 +552,6 @@ foreach ($cs in $sortedHistory) {
            
             $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($sourceBranch.TfsPath, $sourceBranch.Rewrite).TrimStart('/').Replace('/', '\')
 
-         
-
             # DELETE: Handle if this is just a delete, we will not link the deleted source file and the target file for deletion
             if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
                 git rm -f $relativePath
@@ -701,7 +699,7 @@ foreach ($cs in $sortedHistory) {
                 Ensure-ItemDirectory $itemType $relativePath
 
                 $changeItem.DownloadFile($target.FullName)
-                
+
                 git add $relativePath
                 $processedFiles++
 
