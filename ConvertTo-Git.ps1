@@ -555,7 +555,7 @@ foreach ($cs in $sortedHistory) {
 
             # DELETE: Handle if this is just a delete, we will not link the deleted source file and the target file for deletion
             if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
-                git rm -f $relativePath
+                git rm -f "$relativePath"
 
                 pop-location #branch
                 continue
@@ -565,10 +565,10 @@ foreach ($cs in $sortedHistory) {
             $backupHead = git rev-parse HEAD  
 
             # CHECKOUT from hash:
-            git checkout -f $sourcehash -- $sourceRelativePath
+            git checkout -f $sourcehash -- "$sourceRelativePath"
 
             # GIT State update, for git mv to work
-            git add $sourceRelativePath
+            git add "$sourceRelativePath"
 
             # CHECKOUT RENAME: Source and Destination is not the same :
             if ($sourceRelativePath -ne $relativePath) {
@@ -580,12 +580,12 @@ foreach ($cs in $sortedHistory) {
                 
                 "Source $sourceRelativePath =" + (Test-Path $sourceRelativePath)
                 "Target $dir =" + (Test-Path $dir)
-                
+
                 # Track the move
-                git mv -fv $sourceRelativePath $relativePath
+                git mv -fv "$sourceRelativePath" "$relativePath"
 
                 # Revert the original sourcerelativePath
-                git checkout -f $backupHead -- $sourceRelativePath
+                git checkout -f $backupHead -- "$sourceRelativePath"
             }
 
        
@@ -650,7 +650,7 @@ foreach ($cs in $sortedHistory) {
 
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
             # Remove the file or directory
-            git rm -f $relativePath
+            git rm -f "$relativePath"
 
             # Next item!
             pop-location #branch
@@ -679,7 +679,7 @@ foreach ($cs in $sortedHistory) {
                 # Ensure path is created before move, a git requirement
                 $d=Ensure-ItemDirectory $itemType $relativePath
         
-                git mv -f $sourcePath $relativePath
+                git mv -f "$sourcePath" "$relativePath"
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Renamed from $sourcePath" -ForegroundColor Gray
 
             
@@ -708,7 +708,7 @@ foreach ($cs in $sortedHistory) {
 
                 $changeItem.DownloadFile($target.FullName)
 
-                git add $relativePath
+                git add "$relativePath"
                 $processedFiles++
 
             } catch {
