@@ -561,7 +561,7 @@ foreach ($cs in $sortedHistory) {
             type .git
 
             # CHECKOUT from HASH:
-            git checkout $sourcehash -- $sourceRelativePath
+            git checkout -f $sourcehash -- $sourceRelativePath
             $checkoutSucceeded = $?
             if (-not $checkoutSucceeded) {
                 Write-Host "Available commits for $sourceRelativePath"
@@ -571,9 +571,15 @@ foreach ($cs in $sortedHistory) {
 
             # CHECKOUT RENAME: Source and Destination is not the same :
             if ($sourceRelativePath -ne $relativePath) {
-                git mv -f $sourceRelativePath $relativePath
+                Write-Host "Source relative"
+                dir $sourceRelativePath
+                Write-Host "relativePath"
+                dir $relativePath
+                # Ensure target is removed
+                ri $relativePath -recurse -force
+                git mv -fv $sourceRelativePath $relativePath
                 # revert the original sourcerelativePath
-                git checkout $backupHead -- $sourceRelativePath
+                git checkout -f $backupHead -- $sourceRelativePath
             }
 
             # Register for Quality Control 
