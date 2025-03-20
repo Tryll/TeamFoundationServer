@@ -238,6 +238,7 @@ function Ensure-ItemDirectory {
         New-Item -Path (Join-Path $itemFolder '.gitkeep') -ItemType File -Force | Out-Null
     }
    
+    return $itemFolder
 }
 
 #endregion
@@ -566,13 +567,19 @@ foreach ($cs in $sortedHistory) {
             # CHECKOUT from hash:
             git checkout -f $sourcehash -- $sourceRelativePath
 
+            # GIT State update, for git mv to work
+            git add $sourceRelativePath
+
             # CHECKOUT RENAME: Source and Destination is not the same :
             if ($sourceRelativePath -ne $relativePath) {
+                
                 # Ensure target is removed
                 ri $relativePath -recurse -force -erroraction SilentlyContinue
 
-                Ensure-ItemDirectory $itemType $relativePath
+                $dir=Ensure-ItemDirectory $itemType $relativePath
                 
+                "Source $sourceRelativePath =" + (Test-Path $sourceRelativePath)
+                "Target $dir =" + (Test-Path $dir)
                 # Track the move
                 git mv -fv $sourceRelativePath $relativePath
 
@@ -623,7 +630,7 @@ foreach ($cs in $sortedHistory) {
 
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
 
-            Ensure-ItemDirectory $itemType $relativePath
+            $d=Ensure-ItemDirectory $itemType $relativePath
 
             # Next item!
             pop-location #branch
@@ -669,7 +676,7 @@ foreach ($cs in $sortedHistory) {
                 $sourcePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
 
                 # Ensure path is created before move, a git requirement
-                Ensure-ItemDirectory $itemType $relativePath
+                $d=Ensure-ItemDirectory $itemType $relativePath
         
                 git mv -f $sourcePath $relativePath
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Renamed from $sourcePath" -ForegroundColor Gray
