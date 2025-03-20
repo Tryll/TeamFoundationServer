@@ -533,7 +533,7 @@ foreach ($cs in $sortedHistory) {
 
             # CHECKOUT: Source and Destination is not the same :  Checkout the source file and move it to the target branch
             if ($sourceRelativePath -ne $relativePath) {
-                $backupHead = git rev-parse HEAD 
+                $backupHead = git rev-parse --short HEAD 
                 git checkout $sourceBranchName^{$sourcehash} -- $sourceRelativePath
                 git mv -f $sourceRelativePath $relativePath
                 # revert the original sourcerelativePath
@@ -650,7 +650,7 @@ foreach ($cs in $sortedHistory) {
         # Make the commit
         git commit -m $commitMessage --allow-empty
 
-        $branchHashTracker["$branch-$changesetId"] = git rev-parse HEAD
+        $branchHashTracker["$branch-$changesetId"] = git rev-parse --short HEAD
         $hash=$branchHashTracker["$branch-$changesetId"]
         Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted changes" -ForegroundColor Gray
         pop-location
