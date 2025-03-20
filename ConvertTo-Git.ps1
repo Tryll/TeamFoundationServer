@@ -635,9 +635,14 @@ foreach ($cs in $sortedHistory) {
         if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
             try {
                 # Create directory structure and empty file
+                $hash = Get-NormalizedHash -FilePath $relativePath
                 $target = New-Item -Path $relativePath -ItemType File -Force
                 Write-Host $target.FullName
                 $changeItem.DownloadFile($target.FullName)
+                $hashUpdated = Get-NormalizedHash -FilePath $relativePath
+                if ($hash -ne $hashUpdated) {
+                    Write-Host "File updated"
+                }
                 git add $relativePath
                 $processedFiles++
             } catch {
