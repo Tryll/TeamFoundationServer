@@ -599,6 +599,8 @@ foreach ($cs in $sortedHistory) {
             # Add new directory
             New-Item -Path "$relativePath\.gitkeep" -ItemType File -Force | Out-Null
             git add "$relativePath\.gitkeep"
+
+            # Next item!
             pop-location #branch
             continue
             
@@ -610,6 +612,8 @@ foreach ($cs in $sortedHistory) {
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
             # Remove the file or directory
             git rm -f $relativePath
+
+            # Next item!
             pop-location #branch
             continue
         }
@@ -635,7 +639,7 @@ foreach ($cs in $sortedHistory) {
             throw("Unhandled")
         }
 
-        
+        # Next item!
         pop-location #branch
     }
 
