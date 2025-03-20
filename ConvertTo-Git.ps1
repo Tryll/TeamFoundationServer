@@ -587,12 +587,12 @@ foreach ($cs in $sortedHistory) {
                 $dir=Ensure-ItemDirectory $itemType $relativePath
                 
                 # Track the move
-                #move-item -path "$sourceRelativePath" -Destination "$relativePath" -force -verbose -erroraction Continue
-                #git rm --cached "$sourceRelativePath"
-                #git add "$relativePath"
-
+                move-item -path "$sourceRelativePath" -Destination "$relativePath" -force -verbose -erroraction Continue
+                git rm --cached "$sourceRelativePath"
+                git add "$relativePath"
+                
                 # This does not work consistently.... Maybe it works better without folders
-                git mv -fv "$sourceRelativePath" "$relativePath"
+                #git mv -fv "$sourceRelativePath" "$relativePath"
 
                 # Revert the original sourcerelativePath
                 git checkout -f $backupHead -- "$sourceRelativePath"
