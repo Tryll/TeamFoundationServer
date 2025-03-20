@@ -564,16 +564,16 @@ foreach ($cs in $sortedHistory) {
                 } else {
 
                 # QUALITY CONTROL: 
-                    $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
-                    $tmpFileName = "$env:TEMP\$relativePath"
-                    $changeItem.DownloadFile($tmpFileName)
-                    $tmpFileHash = Get-NormalizedHash -FilePath $tmpFileName
+                $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
+                $tmpFileName = "$env:TEMP\$relativePath"
+                $changeItem.DownloadFile($tmpFileName)
+                $tmpFileHash = Get-NormalizedHash -FilePath $tmpFileName
 
-                    if ($checkedFileHash -ne $tmpFileHash) {
-                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] : $sourceRelativePath - File hash mismatch" -ForegroundColor Red
-                        Write-Host $tmpFileName
-                        throw "stop here"
-                    }
+                if ($checkedFileHash -ne $tmpFileHash) {
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] : $sourceRelativePath - File hash mismatch" -ForegroundColor Red
+                    Write-Host $tmpFileName
+                    throw "stop here"
+                }
                 }
             }
             
