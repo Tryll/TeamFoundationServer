@@ -221,7 +221,7 @@ function Get-NormalizedHash {
     return [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace("-", "")
 }
 
-.endregion #SupportFunctions
+.endregion
 
 
 
@@ -635,10 +635,9 @@ foreach ($cs in $sortedHistory) {
         if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
             try {
                 # Create directory structure and empty file
-                New-Item -Path $relativePath -ItemType File -Force | Out-Null
-                $fullPath = Join-Path -path (pwd) -ChildPath $relativePath
-                $changeItem.DownloadFile($fullPath)
-                git add -f $relativePath
+                $target = New-Item -Path $relativePath -ItemType File -Force
+                $changeItem.DownloadFile($target.FullName)
+                git add $relativePath
                 $processedFiles++
             } catch {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Red
