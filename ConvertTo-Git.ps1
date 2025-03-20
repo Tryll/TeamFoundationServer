@@ -741,7 +741,7 @@ foreach ($cs in $sortedHistory) {
 
         $branchHashTracker["$branch-$changesetId"] = git rev-parse HEAD
         $hash=$branchHashTracker["$branch-$changesetId"]
-        Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted changes" -ForegroundColor Gray
+        Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted" -ForegroundColor Gray
         pop-location
 
 
