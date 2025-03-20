@@ -502,7 +502,8 @@ foreach ($cs in $sortedHistory) {
 
 
         # Merging
-        if ($change.MergeSources.Count -gt 0 -and ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
+        if ($change.MergeSources.Count -gt 0 -and ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or
+                                                    $change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch  )) {
             
             # Find container, branch base path
             $sourceBranchPath =  Get-ItemBranch $change.MergeSources[0].ServerItem $changesetId
@@ -604,7 +605,7 @@ foreach ($cs in $sortedHistory) {
        
         
         # Create Folder
-        if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder -or $changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Any) {
+        if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
 
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
 
@@ -644,6 +645,7 @@ foreach ($cs in $sortedHistory) {
             throw("Unhandled")
         }
 
+
         # Handle rename where it exists, allow it to continue to Edit if that is also requested
         $handled =$false
         if ($changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
@@ -666,6 +668,7 @@ foreach ($cs in $sortedHistory) {
             }
     
         }
+        
 
     
         if ($changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -or 
