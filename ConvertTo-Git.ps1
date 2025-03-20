@@ -534,14 +534,13 @@ foreach ($cs in $sortedHistory) {
             # CHECKOUT: Source and Destination is not the same :  Checkout the source file and move it to the target branch
             if ($sourceRelativePath -ne $relativePath) {
                 $backupHead = git rev-parse HEAD 
-                git checkout $sourcehash -- $sourceRelativePath
+                git checkout $sourceBranchName^{$sourcehash} -- $sourceRelativePath
                 git mv -f $sourceRelativePath $relativePath
                 # revert the original sourcerelativePath
                 git checkout $backupHead -- $sourceRelativePath
         
             } else {
-                git checkout $sourcehash -- $relativePath
-
+                git checkout $sourceBranchName^{$sourcehash} -- $relativePath
             }
 
 
