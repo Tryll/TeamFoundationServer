@@ -701,6 +701,7 @@ foreach ($cs in $sortedHistory) {
                 Ensure-ItemDirectory $itemType $relativePath
 
                 $changeItem.DownloadFile($target.FullName)
+                
                 git add $relativePath
                 $processedFiles++
 
