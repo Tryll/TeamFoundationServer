@@ -439,6 +439,8 @@ foreach ($cs in $sortedHistory) {
     # Process each change in the changeset
     $changeCounter=0
     $changesetId=0
+
+    $qcBranchFileMap=@{}
         
     foreach ($change in $changes) {
         $changeCounter++
@@ -499,6 +501,11 @@ foreach ($cs in $sortedHistory) {
         # Enter Branch:
         push-location $branchName
         $branchChanges[$branchName] = $true
+
+        # Quality controll Map
+        if (-not $qcBranchFileMap.ContainsKey($branchName)) {
+            $qcBranchFileMap[$branchName]=@()
+        }
 
 
         # Merging
@@ -565,6 +572,8 @@ foreach ($cs in $sortedHistory) {
                 git checkout $backupHead -- $sourceRelativePath
             }
 
+            # Register for Quality Control 
+            $qcBranchFileMap[$branchName] = $relativePath
 
        
             if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
@@ -613,6 +622,9 @@ foreach ($cs in $sortedHistory) {
             New-Item -Path "$relativePath\.gitkeep" -ItemType File -Force | Out-Null
             git add "$relativePath\.gitkeep"
 
+            # Register for Quality Control 
+            $qcBranchFileMap[$branchName] = "$relativePath\.gitkeep"
+
             # Next item!
             pop-location #branch
             continue
@@ -657,6 +669,10 @@ foreach ($cs in $sortedHistory) {
                 $sourcePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
                 git mv -f $sourcePath $relativePath
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Renamed from $sourcePath" -ForegroundColor Gray
+
+                # Register for Quality Control 
+                $qcBranchFileMap[$branchName] = $relativePath
+            
                 $handled = $true
             } 
            
@@ -682,6 +698,9 @@ foreach ($cs in $sortedHistory) {
                 $changeItem.DownloadFile($target.FullName)
                 git add $relativePath
                 $processedFiles++
+
+                # Register for Quality Control 
+                $qcBranchFileMap[$branchName] = $relativePath
             } catch {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Red
             }
@@ -718,12 +737,35 @@ foreach ($cs in $sortedHistory) {
         
         # Make the commit
         git commit -m $commitMessage --allow-empty
+        $branchHead = git rev-parse HEAD  
 
         $branchHashTracker["$branch-$changesetId"] = git rev-parse HEAD
         $hash=$branchHashTracker["$branch-$changesetId"]
         Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted changes" -ForegroundColor Gray
         pop-location
+
+
+
+        # Quality Control
+        push-location $projectBranch
+
+        foreach($file in $qcBranchFileMap[$branch]) {
+            $fileExists = git ls-tree $branchHead $file
+            if (-not $fileExists) {
+                Write-Host "File $file exists in branch $branch"
+                throw("file not actually present")
+            }
+        }
+
+        pop-location
+
+
+
     }
+
+
+
+    
 
     # Clean up environment variables
     Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
