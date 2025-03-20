@@ -523,6 +523,15 @@ foreach ($cs in $sortedHistory) {
         if ($change.MergeSources.Count -gt 0 -and ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or
                                                     $change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch  )) {
             
+            # Lets ignore folders in merge/branch, as files are processed subsequently and git handles folders better/to good
+            if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging - ignoring container operations" -ForegroundColor Gray
+                # Next item!
+                pop-location
+                continue;
+            }
+
+
             # Find container, branch base path
             $sourceBranchPath =  Get-ItemBranch $change.MergeSources[0].ServerItem $changesetId
             if ($sourceBranchPath -eq $null) {
@@ -567,21 +576,22 @@ foreach ($cs in $sortedHistory) {
             # CHECKOUT from hash:
             git checkout -f $sourcehash -- "$sourceRelativePath"
 
-            # GIT State update, for git mv to work
-            git add "$sourceRelativePath"
-
             # CHECKOUT RENAME: Source and Destination is not the same :
             if ($sourceRelativePath -ne $relativePath) {
 
-                # Ensure target is removed
-                ri $relativePath -recurse -force -erroraction SilentlyContinue
+                # Ensure target is removed - no longer required as we only do files here now.
+                #if (-not ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
+                #    ri $relativePath -recurse -force -erroraction SilentlyContinue
+                #}
 
                 $dir=Ensure-ItemDirectory $itemType $relativePath
                 
-                "Source $sourceRelativePath =" + (Test-Path $sourceRelativePath)
-                "Target $dir =" + (Test-Path $dir)
-
                 # Track the move
+                #move-item -path "$sourceRelativePath" -Destination "$relativePath" -force -verbose -erroraction Continue
+                #git rm --cached "$sourceRelativePath"
+                #git add "$relativePath"
+                
+                # This does not work consistently.... Maybe it works better without folders
                 git mv -fv "$sourceRelativePath" "$relativePath"
 
                 # Revert the original sourcerelativePath
