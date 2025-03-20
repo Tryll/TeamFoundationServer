@@ -227,15 +227,10 @@ function Get-NormalizedHash {
 function Ensure-ItemDirectory {
     param($itemType, $relativePath)
 
-    $itemFolder = "."
-    if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
-        $itemFolder = $relativePath
-    } else {
-        $itemFolder = $relativePath.Substring(0,$relativePath.LastIndexOf('\'))
-    }
+    $itemFolder = $itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder ? $relativePath : (Split-Path -Path $relativePath -Parent)
 
-    if (-not Test-Path $itemFolder) {
-        New-Item -Path "$relativePath\.gitkeep" -ItemType File -Force | Out-Null
+    if (-not (Test-Path -Path $itemFolder)) {
+        New-Item -Path (Join-Path $itemFolder '.gitkeep') -ItemType File -Force | Out-Null
     }
     return $itemFolder
 }
