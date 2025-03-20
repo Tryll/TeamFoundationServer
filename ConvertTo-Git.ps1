@@ -531,26 +531,25 @@ foreach ($cs in $sortedHistory) {
                 continue
             }
 
-            # CHECKOUT: Source and Destination is not the same :  Checkout the source file and move it to the target branch
-            if ($sourceRelativePath -ne $relativePath) {
-                $backupHead = git rev-parse HEAD                 
-                # Git checkout from hashes failes from time to time, forcing a recursive look for the file first to trigger cache update
-                $commits = git rev-list --all -- $sourceRelativePath
-                git checkout $sourcehash -- $sourceRelativePath
-                $checkoutSucceeded = $?
-                if (-not $checkoutSucceeded) {
-                    Write-Host "Available commits for $sourceRelativePath"
-                    $commits | ForEach-Object { Write-Output $_ }
-                    throw "Failed git checkout"
-                }
+            # Takes current branch head, incase we need to revert a file
+            $backupHead = git rev-parse HEAD  
+            # Git checkout from hashes failes from time to time, forcing a recursive look for the file first to trigger cache update
+            $commits = git rev-list --all -- $sourceRelativePath
 
+            # CHECKOUT from HASH:
+            git checkout $sourcehash -- $sourceRelativePath
+            $checkoutSucceeded = $?
+            if (-not $checkoutSucceeded) {
+                Write-Host "Available commits for $sourceRelativePath"
+                $commits | ForEach-Object { Write-Output $_ }
+                throw "Failed git checkout"
+            }
+
+            # CHECKOUT RENAME: Source and Destination is not the same :
+            if ($sourceRelativePath -ne $relativePath) {
                 git mv -f $sourceRelativePath $relativePath
                 # revert the original sourcerelativePath
                 git checkout $backupHead -- $sourceRelativePath
-        
-            } else {
-                git checkout $sourcehash -- $relativePath
-
             }
 
 
