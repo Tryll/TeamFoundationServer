@@ -572,7 +572,7 @@ foreach ($cs in $sortedHistory) {
 
             # CHECKOUT RENAME: Source and Destination is not the same :
             if ($sourceRelativePath -ne $relativePath) {
-                
+
                 # Ensure target is removed
                 ri $relativePath -recurse -force -erroraction SilentlyContinue
 
@@ -580,6 +580,7 @@ foreach ($cs in $sortedHistory) {
                 
                 "Source $sourceRelativePath =" + (Test-Path $sourceRelativePath)
                 "Target $dir =" + (Test-Path $dir)
+                
                 # Track the move
                 git mv -fv $sourceRelativePath $relativePath
 
