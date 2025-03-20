@@ -473,7 +473,7 @@ foreach ($cs in $sortedHistory) {
            $tfsBranchPath = "$projectPath/$projectBranch"
         }
 
-
+       
         # Check if we have a defined branch:
         $branch = get-branch($tfsBranchPath)
 
@@ -482,7 +482,6 @@ foreach ($cs in $sortedHistory) {
         if ($gitPath -eq $projectPath) {
             $gitPath+="/$projectBranch"
         }
-
         if ($branch -eq $null -or $gitPath -ne $tfsBranchPath) {
             $branch = Add-Branch($tfsBranchPath)
             $branchName=$branch.Name 
@@ -633,16 +632,14 @@ foreach ($cs in $sortedHistory) {
 
         # Download the file if it's not a directory
         if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
+            if ($change.MergeSources.Count -gt 0) {
+                $change.MergeSources | convertto-json
+            }
+
             try {
                 # Create directory structure and empty file
-                $hash = Get-NormalizedHash -FilePath $relativePath
                 $target = New-Item -Path $relativePath -ItemType File -Force
-                Write-Host $target.FullName
                 $changeItem.DownloadFile($target.FullName)
-                $hashUpdated = Get-NormalizedHash -FilePath $relativePath
-                if ($hash -ne $hashUpdated) {
-                    Write-Host "File updated"
-                }
                 git add $relativePath
                 $processedFiles++
             } catch {
