@@ -203,90 +203,6 @@ Write-Host "Initializing Git repository in $OutputPath..." -ForegroundColor Cyan
 Push-Location $OutputPath
 
 
-# find branch by path, longest to shortest
-function Get-Branch  {
-    param ($path)
-    $currentPath = $path.Trim('/')
-    while ($currentPath -ne "") {
-        if ($branches.ContainsKey($currentPath)) {
-            return $branches[$currentPath]
-        }
-        $currentPath = $currentPath.Substring(0, $currentPath.LastIndexOf('/'))
-    }
-    throw "Unknown branch for $path"
-}
-
-# create a new branch directly from container, input should never be a file.
-function Add-Branch {
-    param ($fromContainer)
-    $fromContainer = $fromContainer.Trim('/')
-
-    $source = get-branch($fromContainer)
-    $sourceName = $source.Name
-    $branchName = $fromContainer.Replace($projectPath,"").replace("/","-").Replace("$", "").Replace(".","-").Replace(" ","-").Trim('-')
-    if (Test-Path $branchName) {
-        Write-Host "Branch $branchName already exists" -ForegroundColor Gray
-        return get-branch($newContainer)
-    }
-    
-    Write-Host "Creating branch '$branchName' from '$sourceName'" -ForegroundColor Cyan
-    $branches[$fromContainer] = @{
-        Name = $branchName
-
-        TfsPath = $fromContainer 
-
-        # Ensure the top root is removed
-        Rewrite = $fromContainer.Substring($projectPath.Length).Trim('/')
-    }
-
-    # Create the new branch folder from source branch
-    push-location $sourceName
-    git branch $branchName
-    git worktree add "../$branchName" $branchName
-
-    pop-location
-
-    $branchCount++
-    return $branches[$fromContainer]
-}
-
-function Get-ItemBranch {
-    param ($path, $changesetId)
-
-
-    $changeSet = new-object Microsoft.TeamFoundation.VersionControl.Client.ChangesetVersionSpec -argumentlist @($changesetId)
-
-    do {
-        $item = new-object Microsoft.TeamFoundation.VersionControl.Client.ItemIdentifier($path,  $changeSet )
-        $branchObject = $vcs.QueryBranchObjects($item, [Microsoft.TeamFoundation.VersionControl.Client.RecursionType]::None)
-        if ($branchObject -ne $null) {
-            break
-        }
-
-        $path = $path.SubString(0, $path.LastIndexOf('/'))
-    } while ($path.Length -gt 2)
-
-    if ($path -eq  '$') {
-        return $null
-    }
-    return $path
-}
-
-function Get-NormalizedHash {
-    param ([string]$FilePath)
-    
-    # Normalize line endings and calculate hash in one go
-    $fullPath = Resolve-Path -Path $FilePath | Select-Object -ExpandProperty Path
-    $content = [System.IO.File]::ReadAllText($fullPath) -replace "`r`n", "`n"
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($content)
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    return [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace("-", "")
-}
-
-
-
-
-
 # Connect to TFS with appropriate authentication
 Write-Host "Connecting to TFS at $TfsCollection..." -ForegroundColor Cyan
 $startTime = Get-Date
@@ -706,3 +622,90 @@ Write-Host "2. Add a remote: git remote add origin <your-git-repo-url>" -Foregro
 Write-Host "3. Push to your Git repository: git push -u origin main" -ForegroundColor Cyan
 
 pop-location
+
+
+
+# Support functions
+# ********************************
+
+# find branch by path, longest to shortest
+function Get-Branch  {
+    param ($path)
+    $currentPath = $path.Trim('/')
+    while ($currentPath -ne "") {
+        if ($branches.ContainsKey($currentPath)) {
+            return $branches[$currentPath]
+        }
+        $currentPath = $currentPath.Substring(0, $currentPath.LastIndexOf('/'))
+    }
+    throw "Unknown branch for $path"
+}
+
+# create a new branch directly from container, input should never be a file.
+function Add-Branch {
+    param ($fromContainer)
+    $fromContainer = $fromContainer.Trim('/')
+
+    $source = get-branch($fromContainer)
+    $sourceName = $source.Name
+    $branchName = $fromContainer.Replace($projectPath,"").replace("/","-").Replace("$", "").Replace(".","-").Replace(" ","-").Trim('-')
+    if (Test-Path $branchName) {
+        Write-Host "Branch $branchName already exists" -ForegroundColor Gray
+        return get-branch($newContainer)
+    }
+    
+    Write-Host "Creating branch '$branchName' from '$sourceName'" -ForegroundColor Cyan
+    $branches[$fromContainer] = @{
+        Name = $branchName
+
+        TfsPath = $fromContainer 
+
+        # Ensure the top root is removed
+        Rewrite = $fromContainer.Substring($projectPath.Length).Trim('/')
+    }
+
+    # Create the new branch folder from source branch
+    push-location $sourceName
+    git branch $branchName
+    git worktree add "../$branchName" $branchName
+
+    pop-location
+
+    $branchCount++
+    return $branches[$fromContainer]
+}
+
+function Get-ItemBranch {
+    param ($path, $changesetId)
+
+
+    $changeSet = new-object Microsoft.TeamFoundation.VersionControl.Client.ChangesetVersionSpec -argumentlist @($changesetId)
+
+    do {
+        $item = new-object Microsoft.TeamFoundation.VersionControl.Client.ItemIdentifier($path,  $changeSet )
+        $branchObject = $vcs.QueryBranchObjects($item, [Microsoft.TeamFoundation.VersionControl.Client.RecursionType]::None)
+        if ($branchObject -ne $null) {
+            break
+        }
+
+        $path = $path.SubString(0, $path.LastIndexOf('/'))
+    } while ($path.Length -gt 2)
+
+    if ($path -eq  '$') {
+        return $null
+    }
+    return $path
+}
+
+function Get-NormalizedHash {
+    param ([string]$FilePath)
+    
+    # Normalize line endings and calculate hash in one go
+    $fullPath = Resolve-Path -Path $FilePath | Select-Object -ExpandProperty Path
+    $content = [System.IO.File]::ReadAllText($fullPath) -replace "`r`n", "`n"
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($content)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    return [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace("-", "")
+}
+
+
