@@ -636,6 +636,7 @@ foreach ($cs in $sortedHistory) {
             try {
                 # Create directory structure and empty file
                 $target = New-Item -Path $relativePath -ItemType File -Force
+                Write-Host $target.FullName
                 $changeItem.DownloadFile($target.FullName)
                 git add $relativePath
                 $processedFiles++
