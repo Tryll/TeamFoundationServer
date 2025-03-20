@@ -237,7 +237,7 @@ function Ensure-ItemDirectory {
     if (-not (Test-Path -Path $itemFolder)) {
         New-Item -Path (Join-Path $itemFolder '.gitkeep') -ItemType File -Force | Out-Null
     }
-    return $itemFolder
+   
 }
 
 #endregion
