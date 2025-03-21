@@ -444,13 +444,13 @@ foreach ($cs in $sortedHistory) {
         Write-Progress -Activity "Replaying" -Status "Changeset $changesetId # $processedChangesets / $totalChangesets ($progressPercent%)" -PercentComplete $progressPercent
     }
 
-    Write-Host "[TFS-$changesetId] Processing by $($cs.OwnerDisplayName) from $($cs.CreationDate.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Cyan
+    Write-Host "[TFS-$changesetId] Processing Changeset $changesetId, $($cs.OwnerDisplayName) @ $($cs.CreationDate.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Cyan
     
     # Get detailed changeset info
     $changeset = $vcs.GetChangeset($cs.ChangesetId)
     $changes = $vcs.GetChangesForChangeset($cs.ChangesetId, $true,  [int]::MaxValue, $null, $null, $true)
     $changeCount = $changes.Count
-    Write-Host "[TFS-$changesetId] Contains $changeCount changes" -ForegroundColor Gray
+    Write-Host "[TFS-$changesetId] Changeset with $changeCount changes" -ForegroundColor Gray
    
 
     # Process each change in the changeset
@@ -574,9 +574,23 @@ foreach ($cs in $sortedHistory) {
             $backupHead = git rev-parse HEAD  
 
             # CHECKOUT from hash:
-            git checkout -f $sourcehash -- "$sourceRelativePath"
+            $status = git checkout -f $sourcehash -- "$sourceRelativePath"
+            if ($status.BeginsWith("error")) {
+                Write-Host $status -ForegroundColor Red
+                # Trace it 
+                git log --all -- "$sourceRelativePath"
+                # Try again with branch directly
+                Write-Host "Trying again with branch"
+                git checkout -f $sourceBranchName -- "$sourceRelativePath"
+                Write-Host "Trying again with branch"
+                git log --follow -- "$sourceRelativePath"
+                Write-Host "Trying again with hash from branch"
+                git checkout -f $sourcehash -- "$sourceRelativePath"
 
-            # CHECKOUT RENAME: Source and Destination is not the same :
+                throw ("Stop")
+            }
+
+            # CHECKOUT RENAME: Source and Destination is not the same : (GIT PROBLEMS:)
             if ($sourceRelativePath -ne $relativePath) {
 
                 # Ensure target is removed - no longer required as we only do files here now.
@@ -587,12 +601,15 @@ foreach ($cs in $sortedHistory) {
                 $dir=Ensure-ItemDirectory $itemType $relativePath
                 
                 # Track the move
-                move-item -path "$sourceRelativePath" -Destination "$relativePath" -force -verbose -erroraction Continue
-                git rm --cached "$sourceRelativePath"
-                git add "$relativePath"
-                
-                # This does not work consistently.... Maybe it works better without folders
+             
+                # This does not work consistently...
                 #git mv -fv "$sourceRelativePath" "$relativePath"
+
+                move-item -path "$sourceRelativePath" -Destination "$relativePath" -force -verbose -erroraction Continue
+                $ignore = git rm --cached "$sourceRelativePath"
+                # Ensure move is tracked
+                git add "$relativePath"
+                git log --follow -- "$relativePath"
 
                 # Revert the original sourcerelativePath
                 git checkout -f $backupHead -- "$sourceRelativePath"
@@ -778,7 +795,8 @@ foreach ($cs in $sortedHistory) {
     Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
     Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
     
-    Write-Host "[TFS-$changesetId] Completed" -ForegroundColor Green
+    Write-Host "[TFS-$changesetId] Changeset Completed!" -ForegroundColor Green
+    Write-Host ""
     # reset and loop
     $branchChanges = @{}
 }
