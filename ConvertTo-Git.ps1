@@ -140,6 +140,10 @@ param(
 
 )
 
+# Default Git settings
+git config core.autocrlf false
+git config core.longpaths true
+
 
 # Support functions
 # ********************************
@@ -219,10 +223,9 @@ function Get-ItemBranch {
 
 function Get-NormalizedHash {
     param ([string]$FilePath)
-    
-    # Normalize line endings and calculate hash in one go
-    $fullPath = Resolve-Path -Path $FilePath | Select-Object -ExpandProperty Path
-    $content = [System.IO.File]::ReadAllText($fullPath) -replace "`r`n", "`n"
+  
+    $fullPath = (get-item -Path $FilePath).FullName
+    $content = [System.IO.File]::ReadAllText($fullPath)
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($content)
     $sha = [System.Security.Cryptography.SHA256]::Create()
     return [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace("-", "")
@@ -473,12 +476,6 @@ foreach ($cs in $sortedHistory) {
             $itemType = [Microsoft.TeamFoundation.VersionControl.Client.ItemType]($changeItem.ItemType)
             $itemId= [Int]::Parse($changeItem.ItemId)
             $itemPath = $changeItem.ServerItem
-            $itemContainer = $changeItem.ServerItem
-
-            if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
-                $itemContainer = $itemContainer.Substring(0, $itemContainer.LastIndexOf('/'))
-
-            }
 
             # Abort on mysterious change
             if ($change.MergeSources.Count -gt 1) {
@@ -498,7 +495,7 @@ foreach ($cs in $sortedHistory) {
             # Retrieve TFS Branch for item in changeset
             $tfsBranchPath=  Get-ItemBranch $itemPath $changesetId
             if ($tfsBranchPath -eq $null) {
-            $tfsBranchPath = "$projectPath/$projectBranch"
+                $tfsBranchPath = "$projectPath/$projectBranch"
             }
 
         
@@ -527,8 +524,8 @@ foreach ($cs in $sortedHistory) {
 
 
             # Merging
-            if ($change.MergeSources.Count -gt 0 -and ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or
-                                                        $change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch  )) {
+            if ($change.MergeSources.Count -gt 0 -and ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or
+                                                        $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch  )) {
                 
                 # Lets ignore folders in merge/branch, as files are processed subsequently and git handles folders better/to good
                 if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
@@ -570,7 +567,8 @@ foreach ($cs in $sortedHistory) {
                 $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($sourceBranch.TfsPath, $sourceBranch.Rewrite).TrimStart('/').Replace('/', '\')
 
                 # DELETE: Handle if this is just a delete, we will not link the deleted source file and the target file for deletion
-                if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+                if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+                    Write-Verbose "Deleting $relativePath"
                     iex "git rm -f '$relativePath'"
 
                     pop-location #branch
@@ -586,6 +584,7 @@ foreach ($cs in $sortedHistory) {
                 
 
                 # CHECKOUT from hash:
+                Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
                 iex "git checkout -f $sourcehash -- '$sourceRelativePath'"
 
 
@@ -598,21 +597,23 @@ foreach ($cs in $sortedHistory) {
                     #}
 
                     $dir=Ensure-ItemDirectory $itemType $relativePath
-            
+                    Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
                     iex "git mv -fv '$sourceRelativePath' '$relativePath'"
                     if ($backupHead -ne $null) {
+                        Write-Verbose "Reverting intermediate $sourceRelativePath"
                         # Revert the original sourcerelativePath
                         iex "git checkout -f $backupHead -- '$sourceRelativePath'"
                     }
                 }
 
         
-                if ($change.Item.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
+                if (-not ($itemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder)) {
 
                     # EDIT DOWNLOAD file checked in:
-                    if ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
-                        
+                    if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
+                        Write-Verbose "Downloading item to $relativePath"
                         $changeItem.DownloadFile($relativePath)
+                        
 
                     } 
                 }
@@ -623,7 +624,7 @@ foreach ($cs in $sortedHistory) {
             }
                 
             # Consistency Check: 
-            if ($change.MergeSources.Count -gt 0 -and !(($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) -bor ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch))) {
+            if ($change.MergeSources.Count -gt 0 -and !(($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) -bor ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch))) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - MergeSource > 0" -ForegroundColor Yellow
                 $change | convertto-json
                 throw "stop here"
@@ -632,7 +633,7 @@ foreach ($cs in $sortedHistory) {
         
             
             # Create Folder
-            if ($changeItem.ItemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
+            if ($itemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
 
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
 
@@ -645,7 +646,7 @@ foreach ($cs in $sortedHistory) {
             }
         
             # Remove file
-            if ($changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+            if ($itemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
 
                 # Some debugging
                 if ($change.MergeSources.Count -gt 0) {
@@ -662,18 +663,10 @@ foreach ($cs in $sortedHistory) {
                 continue
             }
 
-    
-            # Download the file if it's not a directory
-            if ($change.Item.ItemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
-                $itemType=[Microsoft.TeamFoundation.VersionControl.Client.ItemType]($change.Item.ItemType)
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath is unhandled $itemType" -ForegroundColor Yellow
-                throw("Unhandled")
-            }
-
 
             # Handle rename where it exists, allow it to continue to Edit if that is also requested
             $handled =$false
-            if ($changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
+            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
 
                 if ($change.MergeSources.Count -gt 0) {
                     if ($change.MergeSources[0].VersionTo -ne $changesetId) {
@@ -703,8 +696,8 @@ foreach ($cs in $sortedHistory) {
             
 
         
-            if ($changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -or 
-                $changeItem.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add) {
+            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -or 
+                $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add) {
                 # Commit/PUT file:
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
 
@@ -730,70 +723,79 @@ foreach ($cs in $sortedHistory) {
 
             # Next item!
             pop-location #branch
+
         } finally {
+
+
             # QUALITY CONTROL: (Previous execution)
-            if ($WithQualityControl -and $relativePath -ne "" -and $itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
+            if ($WithQualityControl -and $relativePath -ne "" -and -not ($itemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder)) {
+
                 push-location $branchName
+                
                 $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
                 $tmpFileName = "$env:TEMP\$relativePath"
                 $changeItem.DownloadFile($tmpFileName)
                 $tmpFileHash = Get-NormalizedHash -FilePath $tmpFileName
-        
+
                 if ($checkedFileHash -ne $tmpFileHash) {
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Quality Control - File hash mismatch" -ForegroundColor Red
                     Write-Host $tmpFileName
                     throw "stop here"
                 }
+
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC Pass" -ForegroundColor Gray
                 remove-item -path $tmpFileName -force
 
                 pop-location
+
             }
+
         }
     }
 
 
-    # Set environment variables for commit author and date
-    $env:GIT_AUTHOR_NAME = $changeset.OwnerDisplayName
-    $env:GIT_AUTHOR_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
-    $env:GIT_AUTHOR_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
-    $env:GIT_COMMITTER_NAME = $changeset.OwnerDisplayName
-    $env:GIT_COMMITTER_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
-    $env:GIT_COMMITTER_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
+    try {
+        # Set environment variables for commit author and date
+        $env:GIT_AUTHOR_NAME = $changeset.OwnerDisplayName
+        $env:GIT_AUTHOR_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
+        $env:GIT_AUTHOR_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
+        $env:GIT_COMMITTER_NAME = $changeset.OwnerDisplayName
+        $env:GIT_COMMITTER_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
+        $env:GIT_COMMITTER_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
 
-    # Commit changes to Git
-    foreach($branch in $branchChanges.Keys) {
-        push-location $branch
-       
-        # Stage all changes
-        git add -A
-        
-        # Prepare commit message
-        $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
-        
-        # Make the commit
-        git commit -m $commitMessage --allow-empty
-        $branchHead = git rev-parse HEAD  
+        # Commit changes to Git
+        foreach($branch in $branchChanges.Keys) {
+            push-location $branch
+            
+            # Stage all changes
+            git add -A
+            
+            # Prepare commit message
+            $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
+            
+            # Make the commit
+            git commit -m $commitMessage --allow-empty
+            $branchHead = git rev-parse HEAD  
 
-        $branchHashTracker["$branch-$changesetId"] = git rev-parse HEAD
-        $hash=$branchHashTracker["$branch-$changesetId"]
-        Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted" -ForegroundColor Gray
-        pop-location
+            $branchHashTracker["$branch-$changesetId"] = git rev-parse HEAD
+            $hash=$branchHashTracker["$branch-$changesetId"]
+            Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted" -ForegroundColor Gray
+            pop-location
 
+        }
+
+    } finally {
+
+        # Clean up environment variables
+        Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_AUTHOR_EMAIL -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_COMMITTER_NAME -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
     }
+   
 
-
-
-    
-
-    # Clean up environment variables
-    Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
-    Remove-Item Env:\GIT_AUTHOR_EMAIL -ErrorAction SilentlyContinue
-    Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
-    Remove-Item Env:\GIT_COMMITTER_NAME -ErrorAction SilentlyContinue
-    Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
-    Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
-    
     Write-Host "[TFS-$changesetId] Changeset Completed!" -ForegroundColor Green
     Write-Host ""
     # reset and loop
