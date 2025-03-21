@@ -575,7 +575,7 @@ foreach ($cs in $sortedHistory) {
 
             # CHECKOUT from hash:
             $status = git checkout -f $sourcehash -- "$sourceRelativePath"
-            if ($status.BeginsWith("error")) {
+            if ($status.BeginsWith("error: ")) {
                 Write-Host $status -ForegroundColor Red
                 # Trace it 
                 git log --all -- "$sourceRelativePath"
@@ -600,16 +600,23 @@ foreach ($cs in $sortedHistory) {
 
                 $dir=Ensure-ItemDirectory $itemType $relativePath
                 
-                # Track the move
-             
                 # This does not work consistently...
-                #git mv -fv "$sourceRelativePath" "$relativePath"
+                $status=git mv -fv "$sourceRelativePath" "$relativePath"
+                if ($status.BeginsWith("error: ")) {
+                    Write-Host $status -ForegroundColor Red
+                    # Trace it 
+                    git log --all -- "$sourceRelativePath"
+                    # Try again with branch directly
+                    Write-Host "Trying again with branch"
+                    git checkout -f $sourceBranchName -- "$sourceRelativePath"
+                    Write-Host "Trying again with branch"
+                    git log --follow -- "$sourceRelativePath"
+                    Write-Host "Trying again with hash from branch"
+                    git checkout -f $sourcehash -- "$sourceRelativePath"
 
-                move-item -path "$sourceRelativePath" -Destination "$relativePath" -force -verbose -erroraction Continue
-                $ignore = git rm --cached "$sourceRelativePath"
-                # Ensure move is tracked
-                git add "$relativePath"
-                git log --follow -- "$relativePath"
+                    throw ("Stop")
+                }
+
 
                 # Revert the original sourcerelativePath
                 git checkout -f $backupHead -- "$sourceRelativePath"
