@@ -738,7 +738,9 @@ foreach ($cs in $sortedHistory) {
 
 
             # QUALITY CONTROL: (Previous execution)
-            if ($WithQualityControl -and $relativePath -ne "" -and -not ($itemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder)) {
+            if ($WithQualityControl -and $relativePath -ne "" -and 
+                -not ($itemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) -and 
+                -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete)) {
 
                 push-location $branchName
                 
