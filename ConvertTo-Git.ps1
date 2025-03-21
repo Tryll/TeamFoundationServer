@@ -575,7 +575,7 @@ foreach ($cs in $sortedHistory) {
 
             # CHECKOUT from hash:
             $status = git checkout -f $sourcehash -- "$sourceRelativePath"
-            if ($status -ne $null -and $status.BeginsWith("error:")) {
+            if ($status -ne $null -and $status.StartsWith("error:")) {
                 Write-Host $status -ForegroundColor Red
                 # Trace it 
                 git log --all -- "$sourceRelativePath"
@@ -602,7 +602,7 @@ foreach ($cs in $sortedHistory) {
                 
                 # This does not work consistently...
                 $status=git mv -fv "$sourceRelativePath" "$relativePath"
-                if ($status -ne $null -and $status.BeginsWith("error:")) {
+                if ($status -ne $null -and $status.StartsWith("error:")) {
                     Write-Host $status -ForegroundColor Red
                     # Trace it 
                     git log --all -- "$sourceRelativePath"
@@ -714,7 +714,7 @@ foreach ($cs in $sortedHistory) {
                 $d=Ensure-ItemDirectory $itemType $relativePath
         
                 $status = git mv -f "$sourcePath" "$relativePath"
-                if ($status -ne $null -and $status.BeginsWith("error:")) {
+                if ($status -ne $null -and $status.StartsWith("error:")) {
                     Write-Host $status -ForegroundColor Red
                     # Trace it 
                     git log --all -- "$sourceRelativePath"
