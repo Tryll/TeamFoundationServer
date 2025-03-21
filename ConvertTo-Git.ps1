@@ -744,6 +744,7 @@ foreach ($cs in $sortedHistory) {
                     Write-Host $tmpFileName
                     throw "stop here"
                 }
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC Pass" -ForegroundColor Gray
                 remove-item -path $tmpFileName -force
 
                 pop-location
