@@ -637,6 +637,14 @@ foreach ($cs in $sortedHistory) {
 
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
 
+                if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Folder - ignoring container delete operations" -ForegroundColor Gray
+                    # Next item!
+                    pop-location #branch
+                    continue
+                }
+                
+
                 $d=Ensure-ItemDirectory $itemType $relativePath
 
                 # Next item!
@@ -646,7 +654,7 @@ foreach ($cs in $sortedHistory) {
             }
         
             # Remove file
-            if ($itemType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
 
                 # Some debugging
                 if ($change.MergeSources.Count -gt 0) {
