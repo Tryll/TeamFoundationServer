@@ -574,7 +574,7 @@ foreach ($cs in $sortedHistory) {
             $backupHead = git rev-parse HEAD  
 
             # CHECKOUT from hash:
-            $status = git checkout -f $sourcehash -- "$sourceRelativePath"
+            $status = git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
             if ($status -ne $null -and $status.StartsWith("error:")) {
                 Write-Host $status -ForegroundColor Red
                 # Trace it 
@@ -601,7 +601,7 @@ foreach ($cs in $sortedHistory) {
                 $dir=Ensure-ItemDirectory $itemType $relativePath
                 
                 # This does not work consistently...
-                $status=git mv -fv "$sourceRelativePath" "$relativePath"
+                $status=git mv -fv "$sourceRelativePath" "$relativePath"  2>&1
                 if ($status -ne $null -and $status.StartsWith("error:")) {
                     Write-Host $status -ForegroundColor Red
                     # Trace it 
@@ -713,7 +713,7 @@ foreach ($cs in $sortedHistory) {
                 # Ensure path is created before move, a git requirement
                 $d=Ensure-ItemDirectory $itemType $relativePath
         
-                $status = git mv -f "$sourcePath" "$relativePath"
+                $status = git mv -f "$sourcePath" "$relativePath"  2>&1
                 if ($status -ne $null -and $status.StartsWith("error:")) {
                     Write-Host $status -ForegroundColor Red
                     # Trace it 
