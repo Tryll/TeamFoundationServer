@@ -140,9 +140,6 @@ param(
 
 )
 
-# Default Git settings
-git config core.autocrlf false
-git config core.longpaths true
 
 
 # Support functions
@@ -388,6 +385,11 @@ Write-Host "Found project $projectPath"
 $d=mkdir $projectBranch
 push-location $projectBranch
 git init -b $projectBranch
+
+# Default Git settings
+git config core.autocrlf false
+git config core.longpaths true
+
 git commit -m "init" --allow-empty
 pop-location
 
