@@ -713,7 +713,22 @@ foreach ($cs in $sortedHistory) {
                 # Ensure path is created before move, a git requirement
                 $d=Ensure-ItemDirectory $itemType $relativePath
         
-                git mv -f "$sourcePath" "$relativePath"
+                $status = git mv -f "$sourcePath" "$relativePath"
+                if ($status.BeginsWith("error: ")) {
+                    Write-Host $status -ForegroundColor Red
+                    # Trace it 
+                    git log --all -- "$sourceRelativePath"
+                    # Try again with branch directly
+                    Write-Host "Trying again with branch"
+                    git checkout -f $sourceBranchName -- "$sourceRelativePath"
+                    Write-Host "Trying again with branch"
+                    git log --follow -- "$sourceRelativePath"
+                    Write-Host "Trying again with hash from branch"
+                    git checkout -f $sourcehash -- "$sourceRelativePath"
+
+                    throw ("Stop")
+                }
+
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Renamed from $sourcePath" -ForegroundColor Gray
 
             
