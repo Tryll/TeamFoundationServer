@@ -33,6 +33,8 @@ While this migration approach can be slower than other methods, it provides seve
 - Suitable for regulated environments requiring migration validation
 
 
+**Design choices:**
+- TFS Branches are persistent, that is - TFS branch deletion is ignored and if requested again it will be reused by a merge operation.
 
 ## License
 
