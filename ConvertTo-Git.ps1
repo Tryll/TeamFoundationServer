@@ -721,7 +721,7 @@ foreach ($cs in $sortedHistory) {
                  
 
                 }  else {
-                    throw ("Rename without source? $change.MergeSources.Count")
+                    Write-Verbose "Rename without source, moving to add directly"
                 }
 
                 # Let it continue
