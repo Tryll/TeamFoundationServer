@@ -528,7 +528,7 @@ foreach ($cs in $sortedHistory) {
 
             # Merging
             if (($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or
-                                                        $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch  )) {
+                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch)) {
                 
                 # The change item is a branch/merge with a source reference
                 if ($change.MergeSources.Count -gt 0) {
@@ -658,12 +658,6 @@ foreach ($cs in $sortedHistory) {
             # Remove file
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
 
-                # Some debugging
-                if ($change.MergeSources.Count -gt 0) {
-                    # If we still have a source dump it 
-                    $change.MergeSources | convertto-json
-                }
-
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
                 # Remove the file or directory
                 $rm=iex "git rm -f '$relativePath'"
@@ -723,8 +717,12 @@ foreach ($cs in $sortedHistory) {
             } catch {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Red
             }
+        
+        } catch {
             
-              
+            # On error disable qualitycontrol and exit
+            $WithQualityControl = $false
+            throw $_
 
         } finally {
 
