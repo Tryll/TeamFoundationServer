@@ -469,61 +469,61 @@ foreach ($cs in $sortedHistory) {
         
     foreach ($change in $changes) {
 
-        try { # Finally for Quality Control, not catcher
- 
-            $changeCounter++
-            $changeItem = $change.Item
-            $changesetId = [Int]::Parse($changeItem.ChangesetId)
-            $changeType = [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]($change.ChangeType)
-            $itemType = [Microsoft.TeamFoundation.VersionControl.Client.ItemType]($changeItem.ItemType)
-            $itemId= [Int]::Parse($changeItem.ItemId)
-            $itemPath = $changeItem.ServerItem
-      
+        $changeCounter++
+        $changeItem = $change.Item
+        $changesetId = [Int]::Parse($changeItem.ChangesetId)
+        $changeType = [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]($change.ChangeType)
+        $itemType = [Microsoft.TeamFoundation.VersionControl.Client.ItemType]($changeItem.ItemType)
+        $itemId= [Int]::Parse($changeItem.ItemId)
+        $itemPath = $changeItem.ServerItem
+    
 
-            # Abort on mysterious change
-            if ($change.MergeSources.Count -gt 1) {
-                $change | convertto-json
-                throw "Multiple merge sources is not supported"
-            } 
-                
-            # Skip changes not in the specified path
-            if ($itemPath.StartsWith($projectPath) -eq $false) {
-                Write-Host "[TFS-$changesetId] [UNKNOWN] [$changeCounter/$changeCount] [$changeType] $itemPath - skipping, out of project" -ForegroundColor Yellow
-                continue
-            }
-            if ($itemPath -eq $projectPath) {
-                continue
-            }  
-        
-            # Retrieve TFS Branch for item in changeset
-            $tfsBranchPath=  Get-ItemBranch $itemPath $changesetId
-            if ($tfsBranchPath -eq $null) {
-                $tfsBranchPath = "$projectPath/$projectBranch"
-            }
-
-        
-            # Check if we have a defined branch:
-            $branch = get-branch($tfsBranchPath)
-
-            # Check if we have a branch change:
-            $gitPath =$branch.TfsPath
-            if ($gitPath -eq $projectPath) {
-                $gitPath+="/$projectBranch"
-            }
-            if ($branch -eq $null -or $gitPath -ne $tfsBranchPath) {
-                $branch = Add-Branch($tfsBranchPath)
-                $branchName=$branch.Name 
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $itemPath - Creating branch $branchName" -ForegroundColor Yellow
-            }
-            $branchName=$branch.Name
+        # Abort on mysterious change
+        if ($change.MergeSources.Count -gt 1) {
+            $change | convertto-json
+            throw "Multiple merge sources is not supported"
+        } 
             
-            # Find file relative path by branch name (folder) and item path replaced with branch local path.
-            # This is the magic that will ensure we track the same files across branches.
-            $relativePath = $itemPath.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
+        # Skip changes not in the specified path
+        if ($itemPath.StartsWith($projectPath) -eq $false) {
+            Write-Host "[TFS-$changesetId] [UNKNOWN] [$changeCounter/$changeCount] [$changeType] $itemPath - skipping, out of project" -ForegroundColor Yellow
+            continue
+        }
+        if ($itemPath -eq $projectPath) {
+            continue
+        }  
+    
+        # Retrieve TFS Branch for item in changeset
+        $tfsBranchPath=  Get-ItemBranch $itemPath $changesetId
+        if ($tfsBranchPath -eq $null) {
+            $tfsBranchPath = "$projectPath/$projectBranch"
+        }
 
-            # Enter Branch:
-            push-location $branchName
-            $branchChanges[$branchName] = $true
+    
+        # Check if we have a defined branch:
+        $branch = get-branch($tfsBranchPath)
+
+        # Check if we have a branch change:
+        $gitPath =$branch.TfsPath
+        if ($gitPath -eq $projectPath) {
+            $gitPath+="/$projectBranch"
+        }
+        if ($branch -eq $null -or $gitPath -ne $tfsBranchPath) {
+            $branch = Add-Branch($tfsBranchPath)
+            $branchName=$branch.Name 
+            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $itemPath - Creating branch $branchName" -ForegroundColor Yellow
+        }
+        $branchName=$branch.Name
+        
+        # Find file relative path by branch name (folder) and item path replaced with branch local path.
+        # This is the magic that will ensure we track the same files across branches.
+        $relativePath = $itemPath.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
+
+        # Enter Branch:
+        push-location $branchName
+        $branchChanges[$branchName] = $true
+
+        try { #  try/finally for pop-location and  quality control
 
 
             # Merging
@@ -535,7 +535,6 @@ foreach ($cs in $sortedHistory) {
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging - ignoring container operations" -ForegroundColor Gray
 
                     # Next item!
-                    pop-location
                     continue
                 }
 
@@ -575,7 +574,6 @@ foreach ($cs in $sortedHistory) {
                     Write-Verbose "Deleting $relativePath"
                     iex "git rm -f '$relativePath'"
 
-                    pop-location #branch
                     continue
                 }
 
@@ -623,7 +621,6 @@ foreach ($cs in $sortedHistory) {
                 }
                 
                 # Next item!
-                pop-location #branch
                 continue
             }
                 
@@ -645,7 +642,6 @@ foreach ($cs in $sortedHistory) {
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Folder - ignoring container delete operations" -ForegroundColor Gray
 
                     # Next item!
-                    pop-location #branch
                     continue
                 }
                 
@@ -653,7 +649,6 @@ foreach ($cs in $sortedHistory) {
                 $d=Ensure-ItemDirectory $itemType $relativePath
 
                 # Next item!
-                pop-location #branch
                 continue
                 
             }
@@ -672,14 +667,13 @@ foreach ($cs in $sortedHistory) {
                 $rm=iex "git rm -f '$relativePath'"
 
                 # Next item!
-                pop-location #branch
                 continue
             }
+
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - SourceRename (await next rename item)" -ForegroundColor Gray
 
                 # Next item!
-                pop-location #branch
                 continue
             }
 
@@ -738,9 +732,7 @@ foreach ($cs in $sortedHistory) {
                 throw ("NOT HANDLED")
             }
 
-            # Next item!
-            pop-location #branch
-
+        
         } finally {
 
 
@@ -748,8 +740,6 @@ foreach ($cs in $sortedHistory) {
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) -and
                  (-not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete))) {
 
-                push-location $branchName
-                
                 $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
                 $tmpFileName = "$env:TEMP\$relativePath"
                 $changeItem.DownloadFile($tmpFileName)
@@ -764,10 +754,11 @@ foreach ($cs in $sortedHistory) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC Pass" -ForegroundColor Gray
                 remove-item -path $tmpFileName -force
 
-                pop-location
-
             } 
               
+
+            # Next item!
+            pop-location #branch
 
         }
     }
