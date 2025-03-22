@@ -6,7 +6,7 @@ Utility scripts and tools for Team Foundation Server (TFS) and Azure DevOps Serv
 
 ## Overview
 
-This repository contains PowerShell scripts that help with TFS management tasks, particularly focusing on migration to Git. These utilities are designed to be auditable, secure, and suitable for use in enterprise environments.
+This repository contains PowerShell scripts that help with TFS management tasks, particularly focusing on migration to Git. These utilities are designed to be auditable, secure, and suitable for use in regulated/enterprise environments.
 
 ## Utilities
 
