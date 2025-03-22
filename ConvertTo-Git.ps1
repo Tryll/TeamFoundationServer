@@ -673,11 +673,16 @@ foreach ($cs in $sortedHistory) {
                 pop-location #branch
                 continue
             }
-
+            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename) {
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - SourceRename (await next rename item)" -ForegroundColor Gray
+                # Next item!
+                pop-location #branch
+                continue
+            }
 
             # Handle rename where it exists, allow it to continue to Edit if that is also requested
             $handled =$false
-            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -or $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename) {
+            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
 
                 if ($change.MergeSources.Count -gt 0) {
 
