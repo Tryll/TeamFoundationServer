@@ -736,7 +736,7 @@ foreach ($cs in $sortedHistory) {
         } finally {
 
 
-            # QUALITY CONTROL: (Previous execution)
+            # QUALITY CONTROL: 
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) -and
                  (-not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete))) {
 
