@@ -168,11 +168,11 @@ function Add-Branch {
     $sourceName = $source.Name
     $branchName = $fromContainer.Replace($projectPath,"").replace("/","-").Replace("$", "").Replace(".","-").Replace(" ","-").Trim('-')
     if (Test-Path $branchName) {
-        Write-Host "Branch $branchName already exists" -ForegroundColor Gray
+        Write-Verbose "Branch $branchName already exists"
         return get-branch($newContainer)
     }
     
-    Write-Host "Creating branch '$branchName' from '$sourceName'" -ForegroundColor Cyan
+    Write-Verbose "Creating branch '$branchName' from '$sourceName'"
     $branches[$fromContainer] = @{
         Name = $branchName
 
@@ -554,7 +554,7 @@ foreach ($cs in $sortedHistory) {
                     $sourceChangesetIdFrom = $change.MergeSources[0].VersionFrom
                     $sourcehash = $branchHashTracker["$sourceBranchName-$sourceChangesetId"]
                     if ($sourceChangesetId -ne $sourceChangesetIdFrom) {
-                        Write-Verbose "Not Implemented: Source range merge $sourceChangesetIdFrom - $sourceChangesetId, using top range only for now." -ForegroundColor Yellow
+                        Write-Verbose "Not Implemented: Source range merge $sourceChangesetIdFrom - $sourceChangesetId, using top range only for now."
                     }
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
 
@@ -616,9 +616,12 @@ foreach ($cs in $sortedHistory) {
 
                         # EDIT DOWNLOAD file checked in:
                         if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
+                           
                             Write-Verbose "Downloading item to $relativePath"
-                            $changeItem.DownloadFile($relativePath)
-                            
+                            # Creates the target file and directory structure
+                            $target = New-Item -Path $relativePath -ItemType File -Force
+                            $changeItem.DownloadFile($target.FullName)
+
 
                         } 
                     }
@@ -719,7 +722,7 @@ foreach ($cs in $sortedHistory) {
             }
         
         } catch {
-            
+
             # On error disable qualitycontrol and exit
             $WithQualityControl = $false
             throw $_
