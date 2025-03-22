@@ -527,112 +527,114 @@ foreach ($cs in $sortedHistory) {
 
 
             # Merging
-            if ($change.MergeSources.Count -gt 0 -and ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or
+            if (($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or
                                                         $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch  )) {
                 
-                # Lets ignore folders in merge/branch, as files are processed subsequently and git handles folders better/to good
-                if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging - ignoring container operations" -ForegroundColor Gray
+                # The change item is a branch/merge with a source reference
+                if ($change.MergeSources.Count -gt 0) {
+                
+                    # Lets ignore folders in merge/branch, as files are processed subsequently and git handles folders better/to good
+                    if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging - ignoring container operations" -ForegroundColor Gray
 
+                        # Next item!
+                        continue
+                    }
+
+
+                    # Find container, branch base path
+                    $sourceBranchPath =  Get-ItemBranch $change.MergeSources[0].ServerItem $changesetId
+                    if ($sourceBranchPath -eq $null) {
+                        throw "Missing branch? $sourceBranchPath -eq $null"
+                    }
+                    $sourceBranch = get-branch($sourceBranchPath)
+                    $sourceBranchName = $sourceBranch.Name
+                    # Find actual checking hash
+                    $sourceChangesetId = $change.MergeSources[0].VersionTo
+                    $sourceChangesetIdFrom = $change.MergeSources[0].VersionFrom
+                    $sourcehash = $branchHashTracker["$sourceBranchName-$sourceChangesetId"]
+                    if ($sourceChangesetId -ne $sourceChangesetIdFrom) {
+                        Write-Verbose "Not Implemented: Source range merge $sourceChangesetIdFrom - $sourceChangesetId, using top range only for now." -ForegroundColor Yellow
+                    }
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
+
+            
+                    
+                    # Simple fix for Root
+                    $tfsPath = $sourceBranch.TfsPath
+                    if ($tfsPath -eq $projectPath) {
+                        $tfsPath+="/main"
+                    }
+                    # Check if we have a defined branch:
+                    if ($tfsPath -ne $sourceBranchPath) {
+                        throw "Missing branch? $tfsPath -ne $sourceBranchPath"
+                    }
+                
+                    $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($sourceBranch.TfsPath, $sourceBranch.Rewrite).TrimStart('/').Replace('/', '\')
+
+                    # DELETE: Handle if this is just a delete, we will not link the deleted source file and the target file for deletion
+                    if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+                        Write-Verbose "Deleting $relativePath"
+                        iex "git rm -f '$relativePath'"
+
+                        continue
+                    }
+
+                    # Takes current branch head, incase we need to revert a file
+                    $backupHead = $null
+                    if (Test-Path -path $sourceRelativePath) {
+                        # If file exists in target branch, we need to revert it back to original state
+                        $backupHead = git rev-parse HEAD  
+                    }
+                    
+
+                    # CHECKOUT from hash:
+                    Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
+                    iex "git checkout -f $sourcehash -- '$sourceRelativePath'"
+
+
+                    # CHECKOUT RENAME: Source and Destination is not the same : (GIT PROBLEMS:)
+                    if ($sourceRelativePath -ne $relativePath) {
+
+                        # Ensure target is removed - no longer required as we only do files here now.
+                        #if (-not ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
+                        #    ri $relativePath -recurse -force -erroraction SilentlyContinue
+                        #}
+
+                        $dir=Ensure-ItemDirectory $itemType $relativePath
+                        Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
+                        iex "git mv -fv '$sourceRelativePath' '$relativePath'"
+                        if ($backupHead -ne $null) {
+                            Write-Verbose "Reverting intermediate $sourceRelativePath"
+                            # Revert the original sourcerelativePath
+                            iex "git checkout -f $backupHead -- '$sourceRelativePath'"
+                        }
+                    }
+
+            
+                    if (-not ($itemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder)) {
+
+                        # EDIT DOWNLOAD file checked in:
+                        if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
+                            Write-Verbose "Downloading item to $relativePath"
+                            $changeItem.DownloadFile($relativePath)
+                            
+
+                        } 
+                    }
+                      
                     # Next item!
                     continue
+                } else {
+
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging/Branch without source"
+                    # Continue processing as normal file
+
                 }
-
-
-                # Find container, branch base path
-                $sourceBranchPath =  Get-ItemBranch $change.MergeSources[0].ServerItem $changesetId
-                if ($sourceBranchPath -eq $null) {
-                    throw "Missing branch? $sourceBranchPath -eq $null"
-                }
-                $sourceBranch = get-branch($sourceBranchPath)
-                $sourceBranchName = $sourceBranch.Name
-                # Find actual checking hash
-                $sourceChangesetId = $change.MergeSources[0].VersionTo
-                $sourceChangesetIdFrom = $change.MergeSources[0].VersionFrom
-                $sourcehash = $branchHashTracker["$sourceBranchName-$sourceChangesetId"]
-                if ($sourceChangesetId -ne $sourceChangesetIdFrom) {
-                    Write-Verbose "Not Implemented: Source range merge $sourceChangesetIdFrom - $sourceChangesetId, using top range only for now." -ForegroundColor Yellow
-                }
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
-
-        
-                
-                # Simple fix for Root
-                $tfsPath = $sourceBranch.TfsPath
-                if ($tfsPath -eq $projectPath) {
-                    $tfsPath+="/main"
-                }
-                # Check if we have a defined branch:
-                if ($tfsPath -ne $sourceBranchPath) {
-                    throw "Missing branch? $tfsPath -ne $sourceBranchPath"
-                }
-            
-                $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($sourceBranch.TfsPath, $sourceBranch.Rewrite).TrimStart('/').Replace('/', '\')
-
-                # DELETE: Handle if this is just a delete, we will not link the deleted source file and the target file for deletion
-                if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
-                    Write-Verbose "Deleting $relativePath"
-                    iex "git rm -f '$relativePath'"
-
-                    continue
-                }
-
-                # Takes current branch head, incase we need to revert a file
-                $backupHead = $null
-                if (Test-Path -path $sourceRelativePath) {
-                    # If file exists in target branch, we need to revert it back to original state
-                    $backupHead = git rev-parse HEAD  
-                }
-                
-
-                # CHECKOUT from hash:
-                Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
-                iex "git checkout -f $sourcehash -- '$sourceRelativePath'"
-
-
-                # CHECKOUT RENAME: Source and Destination is not the same : (GIT PROBLEMS:)
-                if ($sourceRelativePath -ne $relativePath) {
-
-                    # Ensure target is removed - no longer required as we only do files here now.
-                    #if (-not ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
-                    #    ri $relativePath -recurse -force -erroraction SilentlyContinue
-                    #}
-
-                    $dir=Ensure-ItemDirectory $itemType $relativePath
-                    Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
-                    iex "git mv -fv '$sourceRelativePath' '$relativePath'"
-                    if ($backupHead -ne $null) {
-                        Write-Verbose "Reverting intermediate $sourceRelativePath"
-                        # Revert the original sourcerelativePath
-                        iex "git checkout -f $backupHead -- '$sourceRelativePath'"
-                    }
-                }
-
-        
-                if (-not ($itemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder)) {
-
-                    # EDIT DOWNLOAD file checked in:
-                    if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
-                        Write-Verbose "Downloading item to $relativePath"
-                        $changeItem.DownloadFile($relativePath)
-                        
-
-                    } 
-                }
-                
-                # Next item!
-                continue
+              
             }
-                
-            # Consistency Check: 
-            if ($change.MergeSources.Count -gt 0 -and !(($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) -bor ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch))) {
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - MergeSource > 0" -ForegroundColor Yellow
-                $change | convertto-json
-                throw "stop here"
-            }
+     
 
-        
-            
             # Create Folder
             if ($itemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
 
@@ -678,7 +680,6 @@ foreach ($cs in $sortedHistory) {
             }
 
             # Handle rename where it exists, allow it to continue to Edit if that is also requested
-            $handled =$false
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
 
                 if ($change.MergeSources.Count -gt 0) {
@@ -697,42 +698,34 @@ foreach ($cs in $sortedHistory) {
                     $d=Ensure-ItemDirectory $itemType $relativePath            
                     iex "git mv -f '$sourceRelativePath' '$relativePath'"
 
-                    $handled = $true
+                 
 
                 }  else {
                     throw ("Rename without source? $change.MergeSources.Count")
                 }
-            
+
+                # Let it continue
             } 
             
 
-        
-            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -or 
-                $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add) {
-                # Commit/PUT file:
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
+            # Default Commit File action: Edit, Add, Branch without source and so on:
+            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
 
-                try {
-                    # Creates the target file and directory structure
-                    $target = New-Item -Path $relativePath -ItemType File -Force
+            try {
+                # Creates the target file and directory structure
+                $target = New-Item -Path $relativePath -ItemType File -Force
 
-                    $changeItem.DownloadFile($target.FullName)
+                $changeItem.DownloadFile($target.FullName)
 
-                    iex "git add '$relativePath'"
-                    $processedFiles++
+                iex "git add '$relativePath'"
+                $processedFiles++
 
-                } catch {
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Red
-                }
-                $handled = $true
-            } 
-
-            if (-not $handled) {
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath : Not handled" -ForegroundColor Red
-                throw ("NOT HANDLED")
+            } catch {
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Red
             }
+            
+              
 
-        
         } finally {
 
 
@@ -740,6 +733,7 @@ foreach ($cs in $sortedHistory) {
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) -and
                  (-not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete))) {
 
+                Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - QC Processing"
                 $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
                 $tmpFileName = "$env:TEMP\$relativePath"
                 $changeItem.DownloadFile($tmpFileName)
