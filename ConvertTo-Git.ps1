@@ -5,8 +5,8 @@
 .DESCRIPTION
     ConvertTo-Git.ps1 extracts TFVC history and directly replays/applies it to a Git repository.
     This script processes all changesets chronologically through the entire branch hierarchy,
-    maintaining original timestamps, authors, and comments. It creates a consistent, flat 
-    migration suitable for large projects with complex branch structures.
+    maintaining original timestamps, authors, and comments. It creates a consistent project rooted directory tree 
+    suitable for large projects with complex branch structures.
 
     The script supports multiple authentication methods:
     - Windows Integrated Authentication (default)
@@ -22,6 +22,18 @@
 
 .PARAMETER OutputPath
     The local folder where the Git repository will be created/updated.
+
+.PARAMETER PrimaryBranchName
+    The name of the TFS primary project branch and the default Git branch name.
+    Defaults to "main" if not specified.
+
+.PARAMETER FromChangesetId
+    Starting changeset ID for migration. If specified, only changes from this ID forward will be processed.
+    Defaults to 0 (process all changesets).
+
+.PARAMETER WithQualityControl
+    Switch parameter to enable additional validation. When enabled, each file version is verified against
+    the source TFVC repository to ensure integrity. This will slow down the process but ensures accuracy.
 
 .PARAMETER UseWindows
     Switch parameter to use Windows Integrated Authentication (default if no auth method specified).
@@ -40,6 +52,9 @@
     Personal Access Token for Azure DevOps authentication.
     If not provided but UsePAT is specified, the script will check for an environment variable named "TfsAccessToken".
 
+.PARAMETER LogFile
+    Path to write script execution log. Defaults to a timestamped file in the temp directory.
+
 .EXAMPLE
     # Using Windows Integrated Authentication (default):
     .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://tfs.company.com/tfs/DefaultCollection"
@@ -57,6 +72,14 @@
 .EXAMPLE
     # Using Personal Access Token (PAT) authentication:
     .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://dev.azure.com/organization" -UsePAT -AccessToken "your-personal-access-token"
+
+.EXAMPLE
+    # Starting migration from a specific changeset:
+    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://dev.azure.com/organization" -FromChangesetId 1000 -UsePAT -AccessToken "your-personal-access-token"
+
+.EXAMPLE
+    # Using quality control for data verification:
+    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://dev.azure.com/organization" -WithQualityControl -UsePAT -AccessToken "your-personal-access-token"
 
 .EXAMPLE
     # Using Personal Access Token from environment variable:
