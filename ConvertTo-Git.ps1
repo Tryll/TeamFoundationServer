@@ -533,6 +533,7 @@ foreach ($cs in $sortedHistory) {
                 # Lets ignore folders in merge/branch, as files are processed subsequently and git handles folders better/to good
                 if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging - ignoring container operations" -ForegroundColor Gray
+
                     # Next item!
                     pop-location
                     continue
@@ -642,6 +643,7 @@ foreach ($cs in $sortedHistory) {
 
                 if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Folder - ignoring container delete operations" -ForegroundColor Gray
+
                     # Next item!
                     pop-location #branch
                     continue
@@ -675,6 +677,7 @@ foreach ($cs in $sortedHistory) {
             }
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - SourceRename (await next rename item)" -ForegroundColor Gray
+
                 # Next item!
                 pop-location #branch
                 continue
@@ -742,9 +745,8 @@ foreach ($cs in $sortedHistory) {
 
 
             # QUALITY CONTROL: (Previous execution)
-            if ($WithQualityControl -and $relativePath -ne "" -and 
-                -not ($itemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) -and 
-                -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete)) {
+            if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) -and
+                 (-not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete))) {
 
                 push-location $branchName
                 
@@ -764,7 +766,8 @@ foreach ($cs in $sortedHistory) {
 
                 pop-location
 
-            }
+            } 
+              
 
         }
     }
