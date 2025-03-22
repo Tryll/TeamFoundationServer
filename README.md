@@ -34,7 +34,7 @@ While this migration approach can be slower than other methods, it provides seve
 
 
 **Design choices:**
-- TFS Branches are persistent, that is - TFS branch deletion is ignored and if requested again it will be reused by a merge operation.
+- TFS Branches are persistent, that is - TFS branch deletion is ignored but files are deleted. If requested again the git branch will be reused by a merge operation.
 
 ## License
 
