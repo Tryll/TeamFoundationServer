@@ -551,7 +551,7 @@ foreach ($cs in $sortedHistory) {
                 $sourceChangesetIdFrom = $change.MergeSources[0].VersionFrom
                 $sourcehash = $branchHashTracker["$sourceBranchName-$sourceChangesetId"]
                 if ($sourceChangesetId -ne $sourceChangesetIdFrom) {
-                    Write-Host "Not Implemented: Source range merge $sourceChangesetIdFrom - $sourceChangesetId, using top range only for now." -ForegroundColor Yellow
+                    Write-Verbose "Not Implemented: Source range merge $sourceChangesetIdFrom - $sourceChangesetId, using top range only for now." -ForegroundColor Yellow
                 }
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
 
@@ -657,7 +657,7 @@ foreach ($cs in $sortedHistory) {
             }
         
             # Remove file
-            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
 
                 # Some debugging
                 if ($change.MergeSources.Count -gt 0) {
@@ -677,63 +677,29 @@ foreach ($cs in $sortedHistory) {
 
             # Handle rename where it exists, allow it to continue to Edit if that is also requested
             $handled =$false
-            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
+            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -or $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename) {
 
                 if ($change.MergeSources.Count -gt 0) {
 
- 
-                    # Find container, branch base path
-                    $sourceBranchPath =  Get-ItemBranch $change.MergeSources[0].ServerItem $changesetId
-                    if ($sourceBranchPath -eq $null) {
-                        throw "Missing branch? $sourceBranchPath -eq $null"
-                    }
-                    $sourceBranch = get-branch($sourceBranchPath)
-                    $sourceBranchName = $sourceBranch.Name
-                    $sourceChangesetId = $change.MergeSources[0].VersionTo
-                    $sourceChangesetIdFrom = $change.MergeSources[0].VersionFrom
-                    $sourcehash = $branchHashTracker["$sourceBranchName-$sourceChangesetId"]
-                    if ($sourceChangesetId -ne $sourceChangesetIdFrom) {
-                        Write-Host "Not Implemented: Source range merge $sourceChangesetIdFrom - $sourceChangesetId, using top range only for now." -ForegroundColor Yellow
-                    }
-                    # Simple fix for Root
-                    $tfsPath = $sourceBranch.TfsPath
-                    if ($tfsPath -eq $projectPath) {
-                        $tfsPath+="/main"
-                    }
-                    # Check if we have a defined branch:
-                    if ($tfsPath -ne $sourceBranchPath) {
-                        throw "Missing branch? $tfsPath -ne $sourceBranchPath"
-                    }
-                
-                    $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($sourceBranch.TfsPath, $sourceBranch.Rewrite).TrimStart('/').Replace('/', '\')
+                    if ($change.MergeSources[0].VersionTo -ne $changesetId) {
+                        Write-Verbose("Renaming from another branch or state is not implemented")
+                        throw ("local rename from another branch? not possible? $changesetId -ne $($change.MergeSources[0].VersionTo)")
+                    }   
+                   
+                    $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
 
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Rename from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] $sourceRelativePath" -ForegroundColor Gray
-                
-                    # Takes current branch head, incase we need to revert a file
-                    $backupHead = $null
-                    if (Test-Path -path $sourceRelativePath) {
-                        # If file exists in target branch, we need to revert it back to original state
-                        $backupHead = git rev-parse HEAD  
-                    }
-
-                    # CHECKOUT from hash:
-                    Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
-                    iex "git checkout -f $sourcehash -- '$sourceRelativePath'"
-
-
-                    # Ensure target directory exists
-                    $dir=Ensure-ItemDirectory $itemType $relativePath
-                    Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
-                    iex "git mv -fv '$sourceRelativePath' '$relativePath'"
-                    if ($backupHead -ne $null) {
-                        Write-Verbose "Reverting intermediate $sourceRelativePath"
-                        # Revert the original sourcerelativePath
-                        iex "git checkout -f $backupHead -- '$sourceRelativePath'"
-                    }
-            
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Rename from $sourceRelativePath" -ForegroundColor Gray
+           
+           
+                    # Ensure path is created before move, a git requirement
+                    $d=Ensure-ItemDirectory $itemType $relativePath            
+                    iex "git mv -f '$sourceRelativePath' '$relativePath'"
 
                     $handled = $true
-                } 
+
+                }  else {
+                    throw ("Rename without source? $change.MergeSources.Count")
+                }
             
             } 
             
