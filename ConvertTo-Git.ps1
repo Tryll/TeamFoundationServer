@@ -667,7 +667,7 @@ foreach ($cs in $sortedHistory) {
 
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
                 # Remove the file or directory
-                iex "git rm -f '$relativePath'"
+                $rm=iex "git rm -f '$relativePath'"
 
                 # Next item!
                 pop-location #branch
