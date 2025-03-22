@@ -478,6 +478,7 @@ foreach ($cs in $sortedHistory) {
             $itemType = [Microsoft.TeamFoundation.VersionControl.Client.ItemType]($changeItem.ItemType)
             $itemId= [Int]::Parse($changeItem.ItemId)
             $itemPath = $changeItem.ServerItem
+      
 
             # Abort on mysterious change
             if ($change.MergeSources.Count -gt 1) {
@@ -664,7 +665,7 @@ foreach ($cs in $sortedHistory) {
                     $change.MergeSources | convertto-json
                 }
 
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [Delete] $relativePath" -ForegroundColor Gray
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
                 # Remove the file or directory
                 iex "git rm -f '$relativePath'"
 
@@ -679,30 +680,62 @@ foreach ($cs in $sortedHistory) {
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
 
                 if ($change.MergeSources.Count -gt 0) {
-                    if ($change.MergeSources[0].VersionTo -ne $changesetId) {
-                        throw ("local rename from another branch? not possible? $changesetId -ne $($change.MergeSources[0].VersionTo)")
-                    }   
-                    $sourcePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
 
-                    # Ensure path is created before move, a git requirement
-                    $d=Ensure-ItemDirectory $itemType $relativePath
+ 
+                    # Find container, branch base path
+                    $sourceBranchPath =  Get-ItemBranch $change.MergeSources[0].ServerItem $changesetId
+                    if ($sourceBranchPath -eq $null) {
+                        throw "Missing branch? $sourceBranchPath -eq $null"
+                    }
+                    $sourceBranch = get-branch($sourceBranchPath)
+                    $sourceBranchName = $sourceBranch.Name
+                    $sourceChangesetId = $change.MergeSources[0].VersionTo
+                    $sourceChangesetIdFrom = $change.MergeSources[0].VersionFrom
+                    $sourcehash = $branchHashTracker["$sourceBranchName-$sourceChangesetId"]
+                    if ($sourceChangesetId -ne $sourceChangesetIdFrom) {
+                        Write-Host "Not Implemented: Source range merge $sourceChangesetIdFrom - $sourceChangesetId, using top range only for now." -ForegroundColor Yellow
+                    }
+                    # Simple fix for Root
+                    $tfsPath = $sourceBranch.TfsPath
+                    if ($tfsPath -eq $projectPath) {
+                        $tfsPath+="/main"
+                    }
+                    # Check if we have a defined branch:
+                    if ($tfsPath -ne $sourceBranchPath) {
+                        throw "Missing branch? $tfsPath -ne $sourceBranchPath"
+                    }
+                
+                    $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($sourceBranch.TfsPath, $sourceBranch.Rewrite).TrimStart('/').Replace('/', '\')
+
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Rename from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] $sourceRelativePath" -ForegroundColor Gray
+                
+                    # Takes current branch head, incase we need to revert a file
+                    $backupHead = $null
+                    if (Test-Path -path $sourceRelativePath) {
+                        # If file exists in target branch, we need to revert it back to original state
+                        $backupHead = git rev-parse HEAD  
+                    }
+
+                    # CHECKOUT from hash:
+                    Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
+                    iex "git checkout -f $sourcehash -- '$sourceRelativePath'"
+
+
+                    # Ensure target directory exists
+                    $dir=Ensure-ItemDirectory $itemType $relativePath
+                    Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
+                    iex "git mv -fv '$sourceRelativePath' '$relativePath'"
+                    if ($backupHead -ne $null) {
+                        Write-Verbose "Reverting intermediate $sourceRelativePath"
+                        # Revert the original sourcerelativePath
+                        iex "git checkout -f $backupHead -- '$sourceRelativePath'"
+                    }
             
-                    iex "git mv -f '$sourcePath' '$relativePath'"
-                
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Renamed from $sourcePath" -ForegroundColor Gray
 
-                
                     $handled = $true
                 } 
             
-            } else {
-                # Some debugging
-                if ($change.MergeSources.Count -gt 0) {
-                    # If we still have a source dump it 
-                    $change.MergeSources | convertto-json
-                }
-        
-            }
+            } 
             
 
         
