@@ -283,22 +283,15 @@ function Get-CommitFileName {
         
         [switch]$insensitive = $true
     )
-
+    $path =$path.replace("\", "/")
     # Use git show instead of git log to target a specific commit
-    $out = git show --name-only $commit 2>&1
+    $out = git ls-tree -r --name-only $commit 2>&1
     if ($out -is [System.Management.Automation.ErrorRecord]) {
         throw $out
     }
 
-    # Reverse the array order
-    [array]::Reverse($out)
-
     # Files will come first in the reverse order before hitting empty lines/git comment
     foreach ($file in $out) {
-        if ([string]::IsNullOrEmpty($file)) {
-            # We've reached the header/commit message part
-            continue
-        }
       
         # Case-insensitive comparison
         if ($insensitive) {
@@ -317,8 +310,9 @@ function Get-CommitFileName {
     }
 
     # Not found - show the full commit info for debugging
-    git show --name-only $commit
-    throw("File '$path' not found in commit $commit")
+    git ls-tree -r --name-only $commit
+    $str="File '$path' not found in commit $commit"
+    throw($str)
 }
 
 #endregion
@@ -770,6 +764,7 @@ foreach ($cs in $sortedHistory) {
                     }   
                    
                     $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
+                    
                     $sourceRelativePath = Get-CommitFileName -commit $branchName -path $sourceRelativePath
                  
 
