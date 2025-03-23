@@ -412,6 +412,8 @@ git init -b $projectBranch
 # Default Git settings
 git config core.autocrlf false
 git config core.longpaths true
+# Old TFS checkins are case-insensitive, so we need to ignore case, we may have to use git show and manual search
+git config core.ignoreCase true
 
 git commit -m "init" --allow-empty
 pop-location
