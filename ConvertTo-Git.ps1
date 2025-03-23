@@ -314,6 +314,43 @@ function Get-CommitFileName {
     $str="File '$path' not found in commit $commit"
     throw($str)
 }
+function Get-SourceItem {
+    param($change, $changesetId)
+   
+    # Find container, branch base path
+    $Source = @{
+        Path = $change.MergeSources[0].ServerItem
+        BranchPath = Get-ItemBranch $change.MergeSources[0].ServerItem $changesetId
+    }
+    if ($Source.Path -eq $null) {
+        $item=$change.MergeSources[0].ServerItem
+        Write-Verbose "Get-SourceItem failed finding branch for $item from $changesetId"
+        throw "Missing branch? $($Source.BranchPath) -eq $null"
+    }
+
+    $Source.Branch = get-branch $Source.BranchPath
+    $Source.BranchName = $Source.Branch.Name
+    $Source.ChangesetId = $change.MergeSources[0].VersionTo
+    $Source.ChangesetIdFrom = $change.MergeSources[0].VersionFrom
+    $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]
+
+  
+    if ($Source.ChangesetId -ne $Source.ChangesetIdFrom) {
+        Write-Verbose "Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
+    }
+    
+    # Simple fix for Root, using global $projectPath
+    if ($Source.Branch.TfsPath -eq $projectPath) {
+        $Source.Branch.TfsPath+="/main"
+    }
+
+    $Source.RelativePath = $Source.Path.Replace($Source.Branch.TfsPath, $Source.Branch.Rewrite).TrimStart('/').Replace('/', '\')
+    
+    # Make sure relative path matches git textual case
+    $Source.RelativePath  = Get-CommitFileName -commit $Source.Hash -path $Source.RelativePath 
+
+    return $Source
+}
 
 #endregion
 
@@ -598,52 +635,22 @@ foreach ($cs in $sortedHistory) {
         try { #  try/finally for pop-location and  quality control
 
 
-            # Merging
+            # Merging/Branching and Rename (Rename essentially acts as a merge with source, since we are branching early)
             if (($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or
-                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch)) {
+                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch -or
+                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename)) {
                 
                 # The change item is a branch/merge with a source reference
                 if ($change.MergeSources.Count -gt 0) {
                 
                     # Lets ignore folders in merge/branch, as files are processed subsequently and git handles folders better/to good
                     if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
-                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging - ignoring container operations" -ForegroundColor Gray
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging/Rename/Branch - ignoring container operations" -ForegroundColor Gray
 
                         # Next item!
                         continue
                     }
 
-
-                    # Find container, branch base path
-                    $sourceBranchPath =  Get-ItemBranch $change.MergeSources[0].ServerItem $changesetId
-                    if ($sourceBranchPath -eq $null) {
-                        throw "Missing branch? $sourceBranchPath -eq $null"
-                    }
-                    $sourceBranch = get-branch($sourceBranchPath)
-                    $sourceBranchName = $sourceBranch.Name
-                    # Find actual checking hash
-                    $sourceChangesetId = $change.MergeSources[0].VersionTo
-                    $sourceChangesetIdFrom = $change.MergeSources[0].VersionFrom
-                    $sourcehash = $branchHashTracker["$sourceBranchName-$sourceChangesetId"]
-                    if ($sourceChangesetId -ne $sourceChangesetIdFrom) {
-                        Write-Verbose "Not Implemented: Source range merge $sourceChangesetIdFrom - $sourceChangesetId, using top range only for now."
-                    }
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
-
-            
-                    
-                    # Simple fix for Root
-                    $tfsPath = $sourceBranch.TfsPath
-                    if ($tfsPath -eq $projectPath) {
-                        $tfsPath+="/main"
-                    }
-                    # Check if we have a defined branch:
-                    if ($tfsPath -ne $sourceBranchPath) {
-                        throw "Missing branch? $tfsPath -ne $sourceBranchPath"
-                    }
-                
-                    $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($sourceBranch.TfsPath, $sourceBranch.Rewrite).TrimStart('/').Replace('/', '\')
-                    
                     # DELETE: Handle if this is just a delete, we will not link the deleted source file and the target file for deletion
                     if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
                         Write-Verbose "Deleting $relativePath"
@@ -651,11 +658,16 @@ foreach ($cs in $sortedHistory) {
                         continue
                     }
 
-                    # Find Git commit corrected source file name
-              
-                    $sourceRelativePath = Get-CommitFileName -commit $sourcehash -path $sourceRelativePath
-               
 
+                    # Get source item
+                    $source = Get-SourceItem $change $changesetId
+                    $sourceBranchName = $source.BranchName
+                    $sourceChangesetId = $source.ChangesetId
+                    $sourcehash = $source.Hash
+                    $sourceRelativePath = $source.RelativePath
+                    
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merge/Branch/Rename from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
+                    
                     # Takes current branch head, incase we need to revert a file
                     $backupHead = $null
                     if (Test-Path -path $sourceRelativePath) {
@@ -673,11 +685,6 @@ foreach ($cs in $sortedHistory) {
                     # CHECKOUT RENAME: Source and Destination is not the same : (GIT PROBLEMS:)
                     if ($sourceRelativePath -ne $relativePath) {
 
-                        # Ensure target is removed - no longer required as we only do files here now.
-                        #if (-not ($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
-                        #    ri $relativePath -recurse -force -erroraction SilentlyContinue
-                        #}
-
                         $dir=Ensure-ItemDirectory $itemType $relativePath
                         Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
                         iex "git mv -fv '$sourceRelativePath' '$relativePath'"
@@ -688,26 +695,10 @@ foreach ($cs in $sortedHistory) {
                         }
                     }
 
-            
-                    if (-not ($itemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder)) {
-
-                        # EDIT DOWNLOAD file checked in:
-                        if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
-                           
-                            Write-Verbose "Downloading item to $relativePath"
-                            # Creates the target file and directory structure
-                            $target = New-Item -Path $relativePath -ItemType File -Force
-                            $changeItem.DownloadFile($target.FullName)
-
-
-                        } 
-                    }
-                      
-                    # Next item!
-                    continue
+                    # Let it continue to Edit!
                 } else {
 
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging/Branch without source"
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging/Branch/Rename without source, add"
                     # Continue processing as normal file
 
                 }
@@ -746,44 +737,13 @@ foreach ($cs in $sortedHistory) {
                 continue
             }
 
+            # SourceRename: Skip this item, as it will be handled by the next item
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - SourceRename (await next rename item)" -ForegroundColor Gray
 
                 # Next item!
                 continue
             }
-
-            # Handle rename where it exists, allow it to continue to Edit if that is also requested
-            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
-
-                if ($change.MergeSources.Count -gt 0) {
-
-                    if ($change.MergeSources[0].VersionTo -ne $changesetId) {
-                        Write-Verbose("Renaming from another branch or state is not implemented")
-                        throw ("local rename from another branch? not possible? $changesetId -ne $($change.MergeSources[0].VersionTo)")
-                    }   
-                   
-                    $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
-                    
-                    $sourceRelativePath = Get-CommitFileName -commit $branchName -path $sourceRelativePath
-                 
-
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Rename from $sourceRelativePath" -ForegroundColor Gray
-           
-           
-                    # Ensure path is created before move, a git requirement
-                    $d=Ensure-ItemDirectory $itemType $relativePath            
-                    iex "git mv -f '$sourceRelativePath' '$relativePath'"
-
-                 
-
-                }  else {
-                    Write-Verbose "Rename without source, moving to add directly"
-                }
-
-                # Let it continue
-            } 
-            
 
             # Default Commit File action: Edit, Add, Branch without source and so on:
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
