@@ -299,10 +299,13 @@ function Get-CommitFileName {
             # We've reached the header/commit message part
             continue
         }
-
+      
         # Case-insensitive comparison
         if ($insensitive) {
             if ([string]::Equals($file, $path, [StringComparison]::OrdinalIgnoreCase)) {
+                if ($file -ne $path) {
+                    Write-Verbose "Found Git commited cased file name '$file' for '$path'"
+                }
                 return $file
             }
         } else {
@@ -310,6 +313,7 @@ function Get-CommitFileName {
                 return $file
             }
         }
+        
     }
 
     # Not found - show the full commit info for debugging
@@ -654,9 +658,9 @@ foreach ($cs in $sortedHistory) {
                     }
 
                     # Find Git commit corrected source file name
-                    
-                    $sourceRelativePath Get-CommitFileName -commit $sourcehash -path $sourceRelativePath
-                    Write-Verbose "Git commit specific source naming '$sourceRelativePath'"
+              
+                    $sourceRelativePath = Get-CommitFileName -commit $sourcehash -path $sourceRelativePath
+               
 
                     # Takes current branch head, incase we need to revert a file
                     $backupHead = $null
@@ -766,8 +770,8 @@ foreach ($cs in $sortedHistory) {
                     }   
                    
                     $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
-                    $sourceRelativePath Get-CommitFileName -commit $sourcehash -path $sourceRelativePath
-                    Write-Verbose "Git commit specific source naming $sourceRelativePath"
+                    $sourceRelativePath = Get-CommitFileName -commit $sourcehash -path $sourceRelativePath
+                 
 
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Rename from $sourceRelativePath" -ForegroundColor Gray
            
