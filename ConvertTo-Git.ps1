@@ -347,7 +347,12 @@ function Get-SourceItem {
     $Source.RelativePath = $Source.Path.Replace($Source.Branch.TfsPath, $Source.Branch.Rewrite).TrimStart('/').Replace('/', '\')
     
     # Make sure relative path matches git textual case
-    $Source.RelativePath  = Get-CommitFileName -commit $Source.Hash -path $Source.RelativePath 
+    $reference = $Source.Hash
+    if ($reference -eq $null) {
+        $reference = $Source.BranchName
+    }
+    # This may fail if a changeset has an add and an move in it of the same file, but it is a rare case.
+    $Source.RelativePath  = Get-CommitFileName -commit $reference -path $Source.RelativePath 
 
     return $Source
 }
