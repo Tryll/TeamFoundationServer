@@ -770,7 +770,7 @@ foreach ($cs in $sortedHistory) {
                     }   
                    
                     $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
-                    $sourceRelativePath = Get-CommitFileName -commit $sourcehash -path $sourceRelativePath
+                    $sourceRelativePath = Get-CommitFileName -commit $branchName -path $sourceRelativePath
                  
 
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Rename from $sourceRelativePath" -ForegroundColor Gray
