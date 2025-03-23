@@ -268,6 +268,55 @@ function Ensure-ItemDirectory {
     return $itemFolder
 }
 
+# Get-CommitFileName: Case-insensitive search for files in Git commits.
+# Returns properly-cased filename from a specific commit.
+# Usage: $filename = Get-CommitFileName -commit "a1b2c3d" -path "readme.md"
+# Then: git checkout a1b2c3d -- $filename
+# Parameters: commit (hash), path (filename to find), insensitive (default: true)
+function Get-CommitFileName {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$commit,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$path,
+        
+        [switch]$insensitive = $true
+    )
+
+    # Use git show instead of git log to target a specific commit
+    $out = git show --name-only $commit 2>&1
+    if ($out -is [System.Management.Automation.ErrorRecord]) {
+        throw $out
+    }
+
+    # Reverse the array order
+    [array]::Reverse($out)
+
+    # Files will come first in the reverse order before hitting empty lines/git comment
+    foreach ($file in $out) {
+        if ([string]::IsNullOrEmpty($file)) {
+            # We've reached the header/commit message part
+            continue
+        }
+
+        # Case-insensitive comparison
+        if ($insensitive) {
+            if ([string]::Equals($file, $path, [StringComparison]::OrdinalIgnoreCase)) {
+                return $file
+            }
+        } else {
+            if ($file -eq $path) {
+                return $file
+            }
+        }
+    }
+
+    # Not found - show the full commit info for debugging
+    git show --name-only $commit
+    throw("File '$path' not found in commit $commit")
+}
+
 #endregion
 
 
@@ -596,14 +645,18 @@ foreach ($cs in $sortedHistory) {
                     }
                 
                     $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($sourceBranch.TfsPath, $sourceBranch.Rewrite).TrimStart('/').Replace('/', '\')
-
+                    
                     # DELETE: Handle if this is just a delete, we will not link the deleted source file and the target file for deletion
                     if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
                         Write-Verbose "Deleting $relativePath"
                         iex "git rm -f '$relativePath'"
-
                         continue
                     }
+
+                    # Find Git commit corrected source file name
+                    
+                    $sourceRelativePath Get-CommitFileName -commit $sourcehash -path $sourceRelativePath
+                    Write-Verbose "Git commit specific source naming '$sourceRelativePath'"
 
                     # Takes current branch head, incase we need to revert a file
                     $backupHead = $null
@@ -612,6 +665,7 @@ foreach ($cs in $sortedHistory) {
                         $backupHead = git rev-parse HEAD  
                     }
                     
+
 
                     # CHECKOUT from hash:
                     Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
@@ -712,6 +766,8 @@ foreach ($cs in $sortedHistory) {
                     }   
                    
                     $sourceRelativePath = $change.MergeSources[0].ServerItem.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
+                    $sourceRelativePath Get-CommitFileName -commit $sourcehash -path $sourceRelativePath
+                    Write-Verbose "Git commit specific source naming $sourceRelativePath"
 
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Rename from $sourceRelativePath" -ForegroundColor Gray
            
