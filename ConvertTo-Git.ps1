@@ -344,7 +344,7 @@ function Get-SourceItem {
     $Source.ChangesetId = $change.MergeSources[0].VersionTo
     $Source.ChangesetIdFrom = $change.MergeSources[0].VersionFrom
     $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]
-    Write-Verbose "Get-SourceItem: [$($Source.BranchPath)] => [$($Source.BranchName)] => [$($Source.Branch.TfsPath)] => [$($Source.Branch.Rewrite)]"
+    Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetId)] with local $($Source.Branch.Rewrite)"
   
     if ($Source.Hash -eq $null) {
         throw ("Source hash cannot be null")
@@ -670,7 +670,10 @@ foreach ($cs in $sortedHistory) {
                     # DELETE: Handle if this is just a delete, we will not link the deleted source file and the target file for deletion
                     if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
                         Write-Verbose "Deleting $relativePath"
-                        iex "git rm -f '$relativePath'"
+                        $out=git rm -f '$relativePath' 2>&1
+                        if ($out -is [System.Management.Automation.ErrorRecord]) {
+                            throw $out
+                        }
                         continue
                     }
 
@@ -696,7 +699,10 @@ foreach ($cs in $sortedHistory) {
 
                     # CHECKOUT from hash:
                     Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
-                    iex "git checkout -f $sourcehash -- '$sourceRelativePath'"
+                    $out=git checkout -f $sourcehash -- '$sourceRelativePath' 2>&1
+                    if ($out -is [System.Management.Automation.ErrorRecord]) {
+                        throw $out
+                    }
 
 
                     # CHECKOUT RENAME: Source and Destination is not the same : (GIT PROBLEMS:)
@@ -708,7 +714,10 @@ foreach ($cs in $sortedHistory) {
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath"
                             # Revert the original sourcerelativePath
-                            iex "git checkout -f $backupHead -- '$sourceRelativePath'"
+                            $out=git checkout -f $backupHead -- '$sourceRelativePath' 2>&1
+                            if ($out -is [System.Management.Automation.ErrorRecord]) {
+                                throw $out
+                            }
                         }
                     }
 
@@ -748,7 +757,10 @@ foreach ($cs in $sortedHistory) {
 
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
                 # Remove the file or directory
-                $rm=iex "git rm -f '$relativePath'"
+                $out=git rm -f '$relativePath' 2>&1
+                if ($out -is [System.Management.Automation.ErrorRecord]) {
+                    throw $out
+                }
 
                 # Next item!
                 continue
@@ -771,7 +783,11 @@ foreach ($cs in $sortedHistory) {
 
                 $changeItem.DownloadFile($target.FullName)
 
-                iex "git add '$relativePath'"
+                $out=git add '$relativePath' 2>&1
+                if ($out -is [System.Management.Automation.ErrorRecord]) {
+                    throw $out
+                }
+
                 $processedFiles++
 
             } catch {
