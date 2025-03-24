@@ -683,8 +683,14 @@ foreach ($cs in $sortedHistory) {
                     $sourcehash = $source.Hash
                     $sourceRelativePath = $source.RelativePath
                     
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merge/Branch/Rename from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
                     
+                    if ($sourcehash -eq $null) {
+                        throw ("Merge source hash shold not be null for $($source.Path) and $($source.RelativePath)")
+                    }
+                    
+
+
                     # Takes current branch head, incase we need to revert a file
                     $backupHead = $null
                     if (Test-Path -path $sourceRelativePath) {
@@ -715,7 +721,7 @@ foreach ($cs in $sortedHistory) {
                     # Let it continue to Edit!
                 } else {
 
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging/Branch/Rename without source, add"
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Without source, addding"
                     # Continue processing as normal file
 
                 }
