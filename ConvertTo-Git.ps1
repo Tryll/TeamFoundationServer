@@ -331,7 +331,7 @@ function Get-SourceItem {
     if ($Source.Path -eq $null) {
         $item=$change.MergeSources[0].ServerItem
         Write-Verbose "Get-SourceItem failed finding branch for $item from $changesetId"
-        throw "Get-SourceItem: Missing branch? $($Source.BranchPath) -eq $null"
+        throw "Get-SourceItem: Missing branch for $item"
     }
 
     $Source.BranchPath = Get-ItemBranch $Source.Path $changesetId
