@@ -358,13 +358,8 @@ function Get-SourceItem {
 
     Write-Verbose "Get-SourceItem: [$($Source.BranchName)] [$($Source.ChangesetId)-$($Source.ChangesetIdFrom)] [$($Source.Hash)] $($Source.RelativePath)"
 
-    # Make sure relative path matches git textual case
-    $reference = $Source.Hash
-    if ($reference -eq $null) {
-        $reference = $Source.BranchName
-    }
     # This may fail if a changeset has an add and an move in it of the same file, but it is a rare case.
-    $Source.RelativePath  = Get-CommitFileName -commit $reference -path $Source.RelativePath 
+    $Source.RelativePath  = Get-CommitFileName -commit  $Source.Hash -path $Source.RelativePath 
 
     return $Source
 }
@@ -686,7 +681,7 @@ foreach ($cs in $sortedHistory) {
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
                     
                     if ($sourcehash -eq $null) {
-                        throw ("Merge source hash shold not be null for $($source.Path) and $($source.RelativePath)")
+                        throw ("Source hash should not be null for $($source.Path) and $($source.RelativePath)")
                     }
                     
 
