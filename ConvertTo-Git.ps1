@@ -170,7 +170,7 @@ param(
 #region SupportFunctions
 
 # find branch by path, longest to shortest
-function Get-Branch  {
+function Get-GitBranch  {
     param ($path)
     $currentPath = $path.Trim('/')
     while ($currentPath -ne "") {
@@ -183,16 +183,16 @@ function Get-Branch  {
 }
 
 # create a new branch directly from container, input should never be a file.
-function Add-Branch {
+function Add-GitBranch {
     param ($fromContainer)
     $fromContainer = $fromContainer.Trim('/')
 
-    $source = get-branch($fromContainer)
+    $source = Get-GitBranch($fromContainer)
     $sourceName = $source.Name
     $branchName = $fromContainer.Replace($projectPath,"").replace("/","-").Replace("$", "").Replace(".","-").Replace(" ","-").Trim('-')
     if (Test-Path $branchName) {
         Write-Verbose "Branch $branchName already exists"
-        return get-branch($newContainer)
+        return Get-GitBranch($newContainer)
     }
     
     Write-Verbose "Creating branch '$branchName' from '$sourceName'"
@@ -314,13 +314,14 @@ function Get-CommitFileName {
     $str="File '$path' not found in commit $commit"
     throw($str)
 }
+
+
 function Get-SourceItem {
     param($change, $changesetId)
    
     # Find container, branch base path
     $Source = @{
         Path = $change.MergeSources[0].ServerItem
-        BranchPath = Get-ItemBranch $change.MergeSources[0].ServerItem $changesetId
     }
     if ($Source.Path -eq $null) {
         $item=$change.MergeSources[0].ServerItem
@@ -328,12 +329,13 @@ function Get-SourceItem {
         throw "Missing branch? $($Source.BranchPath) -eq $null"
     }
 
-    $Source.Branch = get-branch $Source.BranchPath
+    $Source.BranchPath = Get-ItemBranch $Source.Path $changesetId
+    $Source.Branch = Get-GitBranch $Source.BranchPath
     $Source.BranchName = $Source.Branch.Name
     $Source.ChangesetId = $change.MergeSources[0].VersionTo
     $Source.ChangesetIdFrom = $change.MergeSources[0].VersionFrom
     $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]
-
+    Write-Verbose "Get-SourceItem: [$($Source.BranchPath)] => [$($Source.BranchName)] => [$($Source.Branch.TfsPath)] => [$($Source.Branch.Rewrite)]"
   
     if ($Source.ChangesetId -ne $Source.ChangesetIdFrom) {
         Write-Verbose "Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
@@ -343,9 +345,10 @@ function Get-SourceItem {
     if ($Source.Branch.TfsPath -eq $projectPath) {
         $Source.Branch.TfsPath+="/main"
     }
-
     $Source.RelativePath = $Source.Path.Replace($Source.Branch.TfsPath, $Source.Branch.Rewrite).TrimStart('/').Replace('/', '\')
-    
+
+    Write-Verbose "Get-SourceItem: [$($Source.BranchName)] [$($Source.ChangesetId)-$($Source.ChangesetIdFrom)] [$($Source.Hash)] $($Source.RelativePath)"
+
     # Make sure relative path matches git textual case
     $reference = $Source.Hash
     if ($reference -eq $null) {
@@ -615,7 +618,7 @@ foreach ($cs in $sortedHistory) {
 
     
         # Check if we have a defined branch:
-        $branch = get-branch($tfsBranchPath)
+        $branch = Get-GitBranch($tfsBranchPath)
 
         # Check if we have a branch change:
         $gitPath =$branch.TfsPath
@@ -623,7 +626,7 @@ foreach ($cs in $sortedHistory) {
             $gitPath+="/$projectBranch"
         }
         if ($branch -eq $null -or $gitPath -ne $tfsBranchPath) {
-            $branch = Add-Branch($tfsBranchPath)
+            $branch = Add-GitBranch($tfsBranchPath)
             $branchName=$branch.Name 
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $itemPath - Creating branch $branchName" -ForegroundColor Yellow
         }
