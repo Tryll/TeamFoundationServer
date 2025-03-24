@@ -323,6 +323,10 @@ function Get-CommitFileName {
 
 function Get-SourceItem {
     param($change, $changesetId)
+
+    if ($change.MergeSources -eq $null -or $change.MergeSources.Count -eq 0) {
+        throw "Get-SourceItem: change item has no sources - $changesetId $($change.Item.ServerItem)"
+    }
    
     # Find container, branch base path
     $Source = @{
