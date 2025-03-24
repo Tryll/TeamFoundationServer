@@ -348,13 +348,13 @@ function Get-SourceItem {
     $Source.ChangesetIdFrom = $change.MergeSources[0].VersionFrom
     $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]
     # Simple fix for Root, using global $projectPath
-    if ($Source.Branch.TfsPath -eq $projectPath) {
-        $Source.Branch.TfsPath+="/main"
-    }
+    #if ($Source.Branch.TfsPath -eq $projectPath) {
+    #    $Source.Branch.TfsPath+="/main"
+    #}
 
     $Source.RelativePath = $Source.Path.Replace($Source.Branch.TfsPath, $Source.Branch.Rewrite).TrimStart('/').Replace('/', '\')
 
-    Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetId)] with local $($Source.Branch.Rewrite) for $($Source.RelativePath)"
+    Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetId)] with rewrite '$($Source.Branch.Rewrite)' for $($Source.RelativePath)"
   
     if ($Source.ChangesetId -ne $changesetId -and $Source.Hash -eq $null) {
         Write-Verbose "Get-SourceItem: Source Hash cannot be null"
