@@ -240,9 +240,12 @@ function Get-ItemBranch {
         $path = $path.SubString(0, $path.LastIndexOf('/'))
     } while ($path.Length -gt 2)
 
+    # Default to main
     if ($path -eq  '$') {
-        return $null
+        Write-Verbose "Get-ItemBranch: Defaulting to main branch for $path at TFS-$changesetId"
+        return "$projectPath/$projectBranch"
     }
+
     return $path
 }
 
@@ -344,26 +347,30 @@ function Get-SourceItem {
     $Source.ChangesetId = $change.MergeSources[0].VersionTo
     $Source.ChangesetIdFrom = $change.MergeSources[0].VersionFrom
     $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]
-    Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetId)] with local $($Source.Branch.Rewrite)"
+    # Simple fix for Root, using global $projectPath
+    if ($Source.Branch.TfsPath -eq $projectPath) {
+        $Source.Branch.TfsPath+="/main"
+    }
+
+    $Source.RelativePath = $Source.Path.Replace($Source.Branch.TfsPath, $Source.Branch.Rewrite).TrimStart('/').Replace('/', '\')
+
+    Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetId)] with local $($Source.Branch.Rewrite) for $($Source.RelativePath)"
   
-    if ($Source.Hash -eq $null) {
-        throw ("Source hash cannot be null")
+    if ($Source.ChangesetId -ne $changesetId -and $Source.Hash -eq $null) {
+        Write-Verbose "Get-SourceItem: Source Hash cannot be null"
     }
 
     if ($Source.ChangesetId -ne $Source.ChangesetIdFrom) {
         Write-Verbose "Get-SourceItem: Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
     }
     
-    # Simple fix for Root, using global $projectPath
-    if ($Source.Branch.TfsPath -eq $projectPath) {
-        $Source.Branch.TfsPath+="/main"
-    }
-    $Source.RelativePath = $Source.Path.Replace($Source.Branch.TfsPath, $Source.Branch.Rewrite).TrimStart('/').Replace('/', '\')
 
     Write-Verbose "Get-SourceItem: [$($Source.BranchName)] [$($Source.ChangesetId)-$($Source.ChangesetIdFrom)] [$($Source.Hash)] $($Source.RelativePath)"
 
     # This may fail if a changeset has an add and an move in it of the same file, but it is a rare case.
-    $Source.RelativePath  = Get-CommitFileName -commit  $Source.Hash -path $Source.RelativePath 
+    if ($Source.Hash -ne $null) {
+        $Source.RelativePath  = Get-CommitFileName -commit  $Source.Hash -path $Source.RelativePath 
+    }
 
     return $Source
 }
@@ -645,6 +652,7 @@ foreach ($cs in $sortedHistory) {
         $relativePath = $itemPath.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
 
         # Enter Branch:
+        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - Processing" -ForegroundColor Cyan
         push-location $branchName
         $branchChanges[$branchName] = $true
 
@@ -654,7 +662,8 @@ foreach ($cs in $sortedHistory) {
             # Merging/Branching and Rename (Rename essentially acts as a merge with source, since we are branching early)
             if (($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or
                  $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch -or
-                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename)) {
+                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -or
+                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
                 
                 # The change item is a branch/merge with a source reference
                 if ($change.MergeSources.Count -gt 0) {
@@ -667,16 +676,7 @@ foreach ($cs in $sortedHistory) {
                         continue
                     }
 
-                    # DELETE: Handle if this is just a delete, we will not link the deleted source file and the target file for deletion
-                    if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
-                        Write-Verbose "Deleting $relativePath"
-                        $out=git rm -f '$relativePath' 2>&1
-                        if ($out -is [System.Management.Automation.ErrorRecord]) {
-                            throw $out
-                        }
-                        continue
-                    }
-
+     
 
                     # Get source item
                     $source = Get-SourceItem $change $changesetId
@@ -690,36 +690,61 @@ foreach ($cs in $sortedHistory) {
 
                     # Takes current branch head, incase we need to revert a file
                     $backupHead = $null
-                    if (Test-Path -path $sourceRelativePath) {
+                    # Do not restore backup if move is in same changeset/branch/commit, the rename is rename
+                    # Source has to exist
+                    if ($sourcehash -ne $null -and (Test-Path -path $sourceRelativePath)) {
                         # If file exists in target branch, we need to revert it back to original state
                         $backupHead = git rev-parse HEAD  
                     }
                     
 
 
-                    # CHECKOUT from hash:
-                    Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
-                    $out=git checkout -f $sourcehash -- '$sourceRelativePath' 2>&1
-                    if ($out -is [System.Management.Automation.ErrorRecord]) {
-                        throw $out
+                    # CHECKOUT from hash, it that exists - else file is local to branch:
+                    if ($sourcehash -ne $null) {
+                        Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
+                        $out=git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
+                        if ($out -is [System.Management.Automation.ErrorRecord]) {
+                            throw $out
+                        }
                     }
-
+                    
 
                     # CHECKOUT RENAME: Source and Destination is not the same : (GIT PROBLEMS:)
                     if ($sourceRelativePath -ne $relativePath) {
 
                         $dir=Ensure-ItemDirectory $itemType $relativePath
                         Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
-                        iex "git mv -fv '$sourceRelativePath' '$relativePath'"
+                        $out = git mv -fv "$sourceRelativePath" "$relativePath" 2>&1
+                        if ($out -is [System.Management.Automation.ErrorRecord]) {
+                            Write-Error "Git rm $relativePath failed"
+                            throw $out
+                        }
+
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath"
                             # Revert the original sourcerelativePath
-                            $out=git checkout -f $backupHead -- '$sourceRelativePath' 2>&1
+                            $out=git checkout -f $backupHead -- "$sourceRelativePath" 2>&1
                             if ($out -is [System.Management.Automation.ErrorRecord]) {
+                                Write-Error "git checkout failed $backupHead $sourceRelativePath"
                                 throw $out
                             }
                         }
                     }
+
+
+                    # DELETE: Is handled after Rename (but not for source rename)
+                    if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
+                        Write-Verbose "Deleting $relativePath"
+                        $out=git rm -f "$relativePath" 2>&1
+                        if ($out -is [System.Management.Automation.ErrorRecord]) {
+                            Write-Error "Git rm $relativePath failed"
+                            throw $out
+                        }
+
+                        # Lets skip the possibility to edit at this time
+                        continue
+                    }
+                
 
                     # Let it continue to Edit!
                 } else {
@@ -757,22 +782,21 @@ foreach ($cs in $sortedHistory) {
 
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
                 # Remove the file or directory
-                $out=git rm -f '$relativePath' 2>&1
+                $out=git rm -f "$relativePath" 2>&1
                 if ($out -is [System.Management.Automation.ErrorRecord]) {
-                    throw $out
-                }
+                    if ( $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
+                        Write-Verbose " [TFS-$changesetId] Ignorning missing $relativePath in changeset"
+                    } else {
+                        Write-Error "Git rm $relativePath failed"
+                        throw $out
+                    }
+                } 
 
                 # Next item!
                 continue
             }
 
-            # SourceRename: Skip this item, as it will be handled by the next item
-            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename) {
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - SourceRename (await next rename item)" -ForegroundColor Gray
 
-                # Next item!
-                continue
-            }
 
             # Default Commit File action: Edit, Add, Branch without source and so on:
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
@@ -780,18 +804,20 @@ foreach ($cs in $sortedHistory) {
             try {
                 # Creates the target file and directory structure
                 $target = New-Item -Path $relativePath -ItemType File -Force
-
+             
                 $changeItem.DownloadFile($target.FullName)
 
-                $out=git add '$relativePath' 2>&1
+                $out=git add "$relativePath" 2>&1
                 if ($out -is [System.Management.Automation.ErrorRecord]) {
+                    Write-Error "Git add $relativePath failed, for $($target.FullName)"
                     throw $out
                 }
 
                 $processedFiles++
 
             } catch {
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId]: $_" -ForegroundColor Red
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId] to $relativePath : $_" -ForegroundColor Red
+                throw("Failed to download $itemPath to $relativePath")
             }
         
         } catch {
