@@ -346,6 +346,10 @@ function Get-SourceItem {
     $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]
     Write-Verbose "Get-SourceItem: [$($Source.BranchPath)] => [$($Source.BranchName)] => [$($Source.Branch.TfsPath)] => [$($Source.Branch.Rewrite)]"
   
+    if ($Source.Hash -eq $null) {
+        throw ("Source hash cannot be null")
+    }
+
     if ($Source.ChangesetId -ne $Source.ChangesetIdFrom) {
         Write-Verbose "Get-SourceItem: Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
     }
@@ -679,12 +683,7 @@ foreach ($cs in $sortedHistory) {
                     $sourceRelativePath = $source.RelativePath
                     
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
-                    
-                    if ($sourcehash -eq $null) {
-                        throw ("Source hash should not be null for $($source.Path) and $($source.RelativePath)")
-                    }
-                    
-
+          
 
                     # Takes current branch head, incase we need to revert a file
                     $backupHead = $null
