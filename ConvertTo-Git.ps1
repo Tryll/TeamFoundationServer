@@ -172,6 +172,10 @@ param(
 # find branch by path, longest to shortest
 function Get-GitBranch  {
     param ($path)
+    if ($path -eq $null) {
+        throw ("Get-GitBranch : Path cannot be null")
+    }
+
     $currentPath = $path.Trim('/')
     while ($currentPath -ne "") {
         if ($branches.ContainsKey($currentPath)) {
@@ -179,7 +183,8 @@ function Get-GitBranch  {
         }
         $currentPath = $currentPath.Substring(0, $currentPath.LastIndexOf('/'))
     }
-    throw "Unknown branch for $path"
+
+    throw "Get-GitBranch Unknown branch for $path"
 }
 
 # create a new branch directly from container, input should never be a file.
@@ -191,11 +196,11 @@ function Add-GitBranch {
     $sourceName = $source.Name
     $branchName = $fromContainer.Replace($projectPath,"").replace("/","-").Replace("$", "").Replace(".","-").Replace(" ","-").Trim('-')
     if (Test-Path $branchName) {
-        Write-Verbose "Branch $branchName already exists"
+        Write-Verbose "Add-GitBranch: Branch $branchName already exists"
         return Get-GitBranch($newContainer)
     }
     
-    Write-Verbose "Creating branch '$branchName' from '$sourceName'"
+    Write-Verbose "Add-GitBranch: Creating branch '$branchName' from '$sourceName'"
     $branches[$fromContainer] = @{
         Name = $branchName
 
@@ -211,7 +216,7 @@ function Add-GitBranch {
     git worktree add "../$branchName" $branchName
     $succeeded = $?
     if (-not $succeeded) {
-        throw ("Work tree creation failed, to long paths? ")
+        throw ("Add-GitBranch: Work tree creation failed, to long paths? ")
     }
     pop-location
 
@@ -297,7 +302,7 @@ function Get-CommitFileName {
         if ($insensitive) {
             if ([string]::Equals($file, $path, [StringComparison]::OrdinalIgnoreCase)) {
                 if ($file -ne $path) {
-                    Write-Verbose "Found Git commited cased file name '$file' for '$path'"
+                    Write-Verbose "Get-CommitFileName: Found Git commited cased file name '$file' for '$path'"
                 }
                 return $file
             }
@@ -311,7 +316,7 @@ function Get-CommitFileName {
 
     # Not found - show the full commit info for debugging
     git ls-tree -r --name-only $commit
-    $str="File '$path' not found in commit $commit"
+    $str="Get-CommitFileName: '$path' not found in commit $commit"
     throw($str)
 }
 
@@ -326,7 +331,7 @@ function Get-SourceItem {
     if ($Source.Path -eq $null) {
         $item=$change.MergeSources[0].ServerItem
         Write-Verbose "Get-SourceItem failed finding branch for $item from $changesetId"
-        throw "Missing branch? $($Source.BranchPath) -eq $null"
+        throw "Get-SourceItem: Missing branch? $($Source.BranchPath) -eq $null"
     }
 
     $Source.BranchPath = Get-ItemBranch $Source.Path $changesetId
@@ -338,7 +343,7 @@ function Get-SourceItem {
     Write-Verbose "Get-SourceItem: [$($Source.BranchPath)] => [$($Source.BranchName)] => [$($Source.Branch.TfsPath)] => [$($Source.Branch.Rewrite)]"
   
     if ($Source.ChangesetId -ne $Source.ChangesetIdFrom) {
-        Write-Verbose "Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
+        Write-Verbose "Get-SourceItem: Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
     }
     
     # Simple fix for Root, using global $projectPath
