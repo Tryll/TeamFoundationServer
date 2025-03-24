@@ -298,6 +298,10 @@ function Get-CommitFileName {
         throw $out
     }
 
+    # Add the deleted to the list of available names to recover
+    $deleted = git show --name-status $hash | Where-Object { $_ -match "^D\s+" } | ForEach-Object { ($_ -split "\s+", 2)[1] }
+    $out = $out + $deleted | select-object -unique
+
     # Files will come first in the reverse order before hitting empty lines/git comment
     foreach ($file in $out) {
       
@@ -381,6 +385,7 @@ function Get-SourceItem {
 
 
 # Start transcript if LogFile is provided
+try { 
 if ($LogFile) {
     Start-Transcript -Path $LogFile -Append -ErrorAction SilentlyContinue
     Write-Host "Logging to: $LogFile" -ForegroundColor Gray
@@ -929,4 +934,10 @@ Write-Host "3. Push to your Git repository: git push -u origin main" -Foreground
 
 pop-location
 
+} finally {
+    # Stop transcript if LogFile is provided
+    if ($LogFile) {
+        Stop-Transcript  -ErrorAction SilentlyContinue
+    }
+}
 
