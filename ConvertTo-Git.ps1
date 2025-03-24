@@ -709,7 +709,12 @@ foreach ($cs in $sortedHistory) {
                         Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
                         $out=git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
-                            throw $out
+                            # file was not found, attempt undelete, it will have to pass QC
+                            $out=git checkout -f $sourcehash^1 -- "$sourceRelativePath" 2>&1
+                            if ($out -is [System.Management.Automation.ErrorRecord]) {
+                                throw $out
+                            }
+                            Write-Verbose "$sourceRelativePath was undeleted from parent to $sourcehash : $out"
                         }
                     }
                     
