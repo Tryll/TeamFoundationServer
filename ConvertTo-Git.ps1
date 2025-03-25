@@ -664,6 +664,7 @@ foreach ($cs in $sortedHistory) {
         try { #  try/finally for pop-location and  quality control
 
 
+            # Retrieve files from a Source changeset, and prepare for other actions later
             # Merging/Branching and Rename (Rename essentially acts as a merge with source, since we are branching early)
             if (($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or
                  $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch -or
@@ -742,20 +743,6 @@ foreach ($cs in $sortedHistory) {
                     }
 
 
-                    # DELETE: Is handled after Rename (but not for source rename)
-                    if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
-                        Write-Verbose "Deleting $relativePath"
-                        $out=git rm -f "$relativePath" 2>&1
-                        if ($out -is [System.Management.Automation.ErrorRecord]) {
-                            Write-Error "Git rm $relativePath failed"
-                            throw $out
-                        }
-
-                        # Lets skip the possibility to edit at this time
-                        continue
-                    }
-                
-
                     # Let it continue to Edit!
                 } else {
 
@@ -787,31 +774,35 @@ foreach ($cs in $sortedHistory) {
                 
             }
         
-            # Default Commit File action: Edit, Add, Branch without source and so on:
-            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
+          # Add/Edit - Downloading:
+            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add -or 
+                $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
+        
+                # Default Commit File action: Edit, Add, Branch without source and so on:
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Downloading" -ForegroundColor Gray
 
-            try {
-                # Creates the target file and directory structure
-                $target = New-Item -Path $relativePath -ItemType File -Force
-             
-                $changeItem.DownloadFile($target.FullName)
+                try {
+                    # Creates the target file and directory structure
+                    $target = New-Item -Path $relativePath -ItemType File -Force
+                
+                    $changeItem.DownloadFile($target.FullName)
 
-                $out=git add "$relativePath" 2>&1
-                if ($out -is [System.Management.Automation.ErrorRecord]) {
-                    Write-Error "Git add $relativePath failed, for $($target.FullName)"
-                    throw $out
+                    $out=git add "$relativePath" 2>&1
+                    if ($out -is [System.Management.Automation.ErrorRecord]) {
+                        Write-Error "Git add $relativePath failed, for $($target.FullName)"
+                        throw $out
+                    }
+
+
+                } catch {
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId] to $relativePath : $_" -ForegroundColor Red
+                    throw("Failed to download $itemPath to $relativePath")
                 }
-
-
-            } catch {
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId] to $relativePath : $_" -ForegroundColor Red
-                throw("Failed to download $itemPath to $relativePath")
             }
 
-
-             # Remove file, as last step
-            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
-
+            # Remove file, as last step, but not on undelete/SourceRename
+            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and
+                 -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
                 # Remove the file or directory
                 $out=git rm -f "$relativePath" 2>&1
@@ -837,7 +828,8 @@ foreach ($cs in $sortedHistory) {
 
             # QUALITY CONTROL: 
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) -and
-                 (-not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete))) {
+                # Dont do QC on Delete, but do on Undelete
+                 (-not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and -not $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename))) {
 
                 Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - QC Processing"
                 $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
