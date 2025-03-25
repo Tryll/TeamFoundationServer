@@ -322,7 +322,7 @@ function Get-CommitFileName {
     }
 
     # Not found - show the full commit info for debugging
-    git ls-tree -r --name-only $commit
+    Write-Verbose ($out | convertto-json)
     $str="Get-CommitFileName: '$path' not found in commit $commit"
     throw($str)
 }
