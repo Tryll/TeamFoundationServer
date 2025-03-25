@@ -573,7 +573,7 @@ Write-Host "Found $totalChangesets changesets - processing from oldest to newest
 
 # Initialize counters
 $processedChangesets = 0
-$processedFiles = 0
+$processedItems = 0
 
 $branchHashTracker = @{}
 
@@ -613,7 +613,7 @@ foreach ($cs in $sortedHistory) {
         $itemType = [Microsoft.TeamFoundation.VersionControl.Client.ItemType]($changeItem.ItemType)
         $itemId= [Int]::Parse($changeItem.ItemId)
         $itemPath = $changeItem.ServerItem
-    
+        $processedItems++
 
         # Abort on mysterious change
         if ($change.MergeSources.Count -gt 1) {
@@ -787,27 +787,6 @@ foreach ($cs in $sortedHistory) {
                 
             }
         
-            # Remove file
-            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
-
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
-                # Remove the file or directory
-                $out=git rm -f "$relativePath" 2>&1
-                if ($out -is [System.Management.Automation.ErrorRecord]) {
-                    if ( $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
-                        Write-Verbose " [TFS-$changesetId] Ignorning missing $relativePath in changeset"
-                    } else {
-                        Write-Error "Git rm $relativePath failed"
-                        throw $out
-                    }
-                } 
-
-                # Next item!
-                continue
-            }
-
-
-
             # Default Commit File action: Edit, Add, Branch without source and so on:
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
 
@@ -823,11 +802,28 @@ foreach ($cs in $sortedHistory) {
                     throw $out
                 }
 
-                $processedFiles++
 
             } catch {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId] to $relativePath : $_" -ForegroundColor Red
                 throw("Failed to download $itemPath to $relativePath")
+            }
+
+
+             # Remove file, as last step
+            if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
+                # Remove the file or directory
+                $out=git rm -f "$relativePath" 2>&1
+                if ($out -is [System.Management.Automation.ErrorRecord]) {
+                    if ( $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
+                        Write-Verbose " [TFS-$changesetId] Ignorning missing $relativePath in changeset"
+                    } else {
+                        Write-Error "Git rm $relativePath failed"
+                        throw $out
+                    }
+                } 
+
             }
         
         } catch {
@@ -929,7 +925,7 @@ $duration = $endTime - $startTime
 Write-Host "`nConversion completed!" -ForegroundColor Green
 Write-Host "Total changesets processed: $processedChangesets" -ForegroundColor Green
 Write-Host "Total branches processed: $branchCount" -ForegroundColor Green
-Write-Host "Total files processed: $processedFiles" -ForegroundColor Green
+Write-Host "Total files processed: $processedItems" -ForegroundColor Green
 Write-Host "Total conversion time: $($duration.Hours) hours, $($duration.Minutes) minutes, $($duration.Seconds) seconds" -ForegroundColor Green
 Write-Host "Git repository location: $OutputPath" -ForegroundColor Green
 Write-Host "`nNext steps:" -ForegroundColor Cyan
