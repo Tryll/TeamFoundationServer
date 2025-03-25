@@ -36,6 +36,69 @@ While this migration approach can be slower than other methods, it provides seve
 **Design choices:**
 - TFS Branches are persistent, that is - TFS branch deletion is implemented as files deletion, persisting the git branch. If requested again the git branch will be reused by a merge operation.
 
+**TFS to GIT Flow**
+```mermaid
+flowchart TD
+    A[Start Processing Changeset] --> B[Sort Changesets by Date]
+    B --> C[For Each Changeset]
+    C --> D[For Each Change Item]
+
+    D --> E{Is Item\nin Project Path?}
+    E -->|No| Skip[Skip Change Item]
+    E -->|Yes| F[Get TFS Branch Path]
+
+    F --> G{Branch Exists\nin Git?}
+    G -->|No| H[Create New Git Branch]
+    G -->|Yes| I[Use Existing Git Branch]
+    H --> I
+
+    I --> J{Change Type?}
+
+    %% Branch/Merge/Rename processing
+    J -->|Branch/Merge/Rename| K{Is Item\na Folder?}
+    K -->|Yes| Skip
+    K -->|No| L[Get Source Item]
+    L --> M[Checkout Source Item from Git Hash]
+    M --> N{Source Path ≠\nTarget Path?}
+    N -->|Yes| O[Git Move File]
+    N -->|No| P[Continue to Edit]
+    O --> P
+
+    %% Folder processing
+    J -->|Folder| Q{Is Delete?}
+    Q -->|Yes| Skip
+    Q -->|No| R[Ensure Directory Exists]
+    R --> Skip
+
+    %% Add/Edit processing
+    J -->|Add/Edit| S[Download File from TFS]
+    S --> T[Git Add File]
+
+    %% Delete processing
+    J -->|Delete| U[Git Remove File]
+
+    %% Quality Control
+    P --> V{Quality\nControl?}
+    T --> V
+    U --> V
+    
+    V -->|Yes| W[Verify File Hash]
+    W --> X{Hash Match?}
+    X -->|No| Error[Throw Error]
+    X -->|Yes| Y[Continue]
+    V -->|No| Y
+
+    %% End of change item processing
+    Y --> Z{More\nChanges?}
+    Z -->|Yes| D
+    Z -->|No| AA[Prepare Commit with Original Author/Date]
+
+    AA --> BB[Commit to All Modified Branches]
+    BB --> CC{More\nChangesets?}
+    CC -->|Yes| C
+    CC -->|No| End[End Conversion]
+```
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
