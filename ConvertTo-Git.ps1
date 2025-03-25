@@ -27,7 +27,7 @@
     The name of the TFS primary project branch and the default Git branch name.
     Defaults to "main" if not specified.
 
-.PARAMETER FromChangesetId
+.PARAMETER ContinueFromId
     Starting changeset ID for migration. If specified, only changes from this ID forward will be processed.
     Defaults to 0 (process all changesets).
 
@@ -75,7 +75,7 @@
 
 .EXAMPLE
     # Starting migration from a specific changeset:
-    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://dev.azure.com/organization" -FromChangesetId 1000 -UsePAT -AccessToken "your-personal-access-token"
+    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://dev.azure.com/organization" -ContinueFromId 1000 -UsePAT -AccessToken "your-personal-access-token"
 
 .EXAMPLE
     # Using quality control for data verification:
@@ -134,7 +134,7 @@ param(
     [string]$PrimaryBranchName = "main",
 
     [Parameter(Mandatory=$false)]
-    [int]$FromChangesetId = 0,
+    [int]$ContinueFromId = 0,
 
     # Quality control effectively checks every iteration of a file, this will slow down the process, but ensure the files are correct.
     [Parameter(Mandatory=$false)]
@@ -547,8 +547,8 @@ $branchCount = 0
 
 
 $fromVersion = $null
-if ($FromChangesetId -gt 0) {
-    $fromVersion = new-object Microsoft.TeamFoundation.VersionControl.Client.ChangesetVersionSpec $FromChangesetId
+if ($ContinueFromId -gt 0) {
+    $fromVersion = new-object Microsoft.TeamFoundation.VersionControl.Client.ChangesetVersionSpec $ContinueFromId
 }
 
 # DOWNLOAD all TFS Project history
