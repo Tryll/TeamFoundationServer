@@ -830,10 +830,8 @@ foreach ($cs in $sortedHistory) {
 
             # QUALITY CONTROL: 
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) -and
-                # Check Undelete
-                ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename) -and 
-                # sKip QC for Delete
-                ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and -not $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename)) {
+                # Skip QC for Delete, but keep undelete
+                -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename)) {
 
                 Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - QC Processing"
                 $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
