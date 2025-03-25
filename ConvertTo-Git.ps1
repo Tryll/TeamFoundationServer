@@ -805,7 +805,7 @@ foreach ($cs in $sortedHistory) {
             # Remove file, as last step, but not on undelete/SourceRename
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and
                  -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath" -ForegroundColor Gray
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting" -ForegroundColor Gray
                 # Remove the file or directory
                 $out=git rm -f "$relativePath" 2>&1
                 if ($out -is [System.Management.Automation.ErrorRecord]) {
@@ -830,8 +830,10 @@ foreach ($cs in $sortedHistory) {
 
             # QUALITY CONTROL: 
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) -and
-                # Dont do QC on Delete, but do on Undelete
-                 (-not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and -not $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename))) {
+                # Check Undelete
+                ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename) -and 
+                # sKip QC for Delete
+                ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and -not $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename)) {
 
                 Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - QC Processing"
                 $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
