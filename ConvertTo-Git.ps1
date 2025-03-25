@@ -299,7 +299,7 @@ function Get-CommitFileName {
     }
 
     # Add the deleted to the list of available names to recover
-    $deleted = git show --name-status $hash | Where-Object { $_ -match "^D\s+" } | ForEach-Object { ($_ -split "\s+", 2)[1] }
+    $deleted = git show --name-status $commit | Where-Object { $_ -match "^D\s+" } | ForEach-Object { ($_ -split "\s+", 2)[1] }
     $out = $out + $deleted | select-object -unique
 
     # Files will come first in the reverse order before hitting empty lines/git comment
