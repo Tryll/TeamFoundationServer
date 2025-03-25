@@ -670,7 +670,8 @@ foreach ($cs in $sortedHistory) {
             if (($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or
                  $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch -or
                  $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -or
-                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
+                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename -or
+                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Undelete)) {
                 
                 # The change item is a branch/merge with a source reference
                 if ($change.MergeSources.Count -gt 0) {
