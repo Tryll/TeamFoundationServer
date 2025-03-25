@@ -614,6 +614,7 @@ foreach ($cs in $sortedHistory) {
         $itemId= [Int]::Parse($changeItem.ItemId)
         $itemPath = $changeItem.ServerItem
         $processedItems++
+        $forceAddNoSource = $false
 
         # Abort on mysterious change
         if ($change.MergeSources.Count -gt 1) {
@@ -748,7 +749,7 @@ foreach ($cs in $sortedHistory) {
 
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Without source, addding"
                     # Continue processing as normal file
-
+                    $forceAddNoSource = $true
                 }
               
             }
@@ -776,7 +777,8 @@ foreach ($cs in $sortedHistory) {
         
           # Add/Edit - Downloading:
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add -or 
-                $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit) {
+                $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -or 
+                $forceAddNoSource ) {
         
                 # Default Commit File action: Edit, Add, Branch without source and so on:
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Downloading" -ForegroundColor Gray
