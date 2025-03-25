@@ -299,7 +299,7 @@ function Get-CommitFileName {
     }
 
     # Add the deleted to the list of available names to recover
-    $deleted = git show --name-status $commit | Where-Object { $_ -match "^D\s+" } | ForEach-Object { ($_ -split "\s+", 2)[1] }
+    $deleted = git show --name-status $commit | % { $f=$_.Split("`t"); $f[1..2] }
     $out = $out + $deleted | select-object -unique
 
     # Files will come first in the reverse order before hitting empty lines/git comment
@@ -577,6 +577,7 @@ $processedItems = 0
 
 $branchHashTracker = @{}
 
+
 # Process each changeset
 foreach ($cs in $sortedHistory) {
     $processedChangesets++
@@ -603,7 +604,8 @@ foreach ($cs in $sortedHistory) {
     $changeCounter=0
     $changesetId=0
     $relativePath =""
-        
+
+
     foreach ($change in $changes) {
 
         $changeCounter++
