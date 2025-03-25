@@ -727,9 +727,14 @@ foreach ($cs in $sortedHistory) {
 
                         $dir=Ensure-ItemDirectory $itemType $relativePath
                         Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
-                        $out = git mv -fv "$sourceRelativePath" "$relativePath" 2>&1
+
+                        #Ensure file it self does not exist, git mv tends to throw a problem around overwrite
+                        remove-item -path $relativePath -force -erroraction SilentlyContinue
+
+                        # Move source to target
+                        $out = git mv -f "$sourceRelativePath" "$relativePath" 2>&1
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
-                            Write-Error "Git rm $relativePath failed"
+                            Write-Error "Git mv $relativePath failed"
                             throw $out
                         }
 
