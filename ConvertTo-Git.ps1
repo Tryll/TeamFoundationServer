@@ -313,15 +313,23 @@ function Get-CommitFileName {
         [switch]$insensitive = $true
     )
     $path =$path.replace("\", "/")
+
+    $originalPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+
     # Use git show instead of git log to target a specific commit
     $out = git ls-tree -r --name-only $commit 2>&1
     if ($out -is [System.Management.Automation.ErrorRecord]) {
         throw $out
     }
-
+    $ErrorActionPreference = $originalPreference
+    
     # Add the deleted to the list of available names to recover
     $deleted = git show --name-status $commit | % { $f=$_.Split("`t"); $f[1..2] }
     $out = $out + $deleted | select-object -unique
+
+
+  
 
     # Files will come first in the reverse order before hitting empty lines/git comment
     foreach ($file in $out) {
@@ -394,7 +402,7 @@ function Get-SourceItem {
 
     # This may fail if a changeset has an add and an move in it of the same file, but it is a rare case.
     if ($Source.Hash -ne $null) {
-        $Source.RelativePath  = Get-CommitFileName -commit  $Source.Hash -path $Source.RelativePath 
+        $Source.RelativePath  = Get-CommitFileName -commit $Source.Hash -path $Source.RelativePath 
     }
 
     return $Source
@@ -707,8 +715,6 @@ foreach ($cs in $sortedHistory) {
                         continue
                     }
 
-     
-
                     # Get source item
                     $source = Get-SourceItem $change $changesetId
                     $sourceBranchName = $source.BranchName
@@ -720,8 +726,8 @@ foreach ($cs in $sortedHistory) {
           
 
                     # Check if we are merging from another branch in the same changeset, this case would not allow checkout to function properly
-                    if ($changesetId -eq  $sourceChangesetId -and $branchName -ne $sourceBranchName -and $sourceHash -eq $null) {
-                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Precommit reference ot inchangeset banch, commiting early"
+                    if ($changesetId -eq  $sourceChangesetId -and $branchName -ne $sourceBranchName -and $sourcehash -eq $null) {
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Reference is intra changeset, commiting early"
                  
                         pop-location # Exit current branch
 
@@ -737,22 +743,21 @@ foreach ($cs in $sortedHistory) {
                           
                             # Enter source branch for early commit
                             push-location $sourceBranchName
-                            git add -A
+                            git add -A 2>&1 | Out-Host
                             $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
-                            git commit -m $commitMessage --allow-empty
+                            git commit -m $commitMessage --allow-empty 2>&1 | Out-Host
                             $sourcehash = git rev-parse HEAD
                             $branchHashTracker["$sourceBranchName-$changesetId"] = $sourcehash
-                            Write-Host "[TFS-$changesetId] [$sourceBranchName-] [$sourcehash] Comitted" -ForegroundColor Gray
-                            pop-location #sourceBranchName
+                            Write-Host "[TFS-$changesetId] [$sourceBranchName] [$sourcehash] Comitted" -ForegroundColor Gray
 
                             # Ensuring sourceRelativePath refers to the corrected filename
-                            $sourceRelativePath = Get-CommitFileName -commit  $sourcehash -path $sourceRelativePath
-
+                            $sourceRelativePath = Get-CommitFileName -commit $sourcehash -path $sourceRelativePath
+                            
+                            pop-location #sourceBranchName
+                 
                             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] Commit updated!" -ForegroundColor Gray
           
-
-                            
-                            
+                        
 
                         } finally {
                     
@@ -975,17 +980,16 @@ foreach ($cs in $sortedHistory) {
             push-location $branch
             
             # Stage all changes
-            git add -A
+            git add -A 2>&1 | Out-Host
             
             # Prepare commit message
             $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
             
             # Make the commit
-            git commit -m $commitMessage --allow-empty
-            $branchHead = git rev-parse HEAD  
+            git commit -m $commitMessage --allow-empty 2>&1 | Out-Host
+            $hash = git rev-parse HEAD  
 
-            $branchHashTracker["$branch-$changesetId"] = git rev-parse HEAD
-            $hash=$branchHashTracker["$branch-$changesetId"]
+            $branchHashTracker["$branch-$changesetId"] =  $hash
             Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted" -ForegroundColor Gray
             pop-location
 
