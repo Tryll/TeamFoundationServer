@@ -249,15 +249,6 @@ function Get-ItemBranch {
     return $path
 }
 
-function Get-NormalizedHash {
-    param ([string]$FilePath)
-  
-    $fullPath = (get-item -Path $FilePath).FullName
-    $content = [System.IO.File]::ReadAllText($fullPath)
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($content)
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    return [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace("-", "")
-}
 function Compare-Files {
     param (
         [Parameter(Mandatory=$true)]
