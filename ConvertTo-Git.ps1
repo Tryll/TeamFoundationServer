@@ -745,8 +745,13 @@ foreach ($cs in $sortedHistory) {
                             push-location $sourceBranchName
                             git add -A 2>&1 | Out-Host
                             $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
+
+                            $originalPreference = $ErrorActionPreference
+                            $ErrorActionPreference = 'Continue'
                             git commit -m $commitMessage --allow-empty 2>&1 | Out-Host
                             $sourcehash = git rev-parse HEAD
+                            $ErrorActionPreference = $originalPreference
+
                             $branchHashTracker["$sourceBranchName-$changesetId"] = $sourcehash
                             Write-Host "[TFS-$changesetId] [$sourceBranchName] [$sourcehash] Comitted" -ForegroundColor Gray
 
