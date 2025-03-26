@@ -258,6 +258,36 @@ function Get-NormalizedHash {
     $sha = [System.Security.Cryptography.SHA256]::Create()
     return [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace("-", "")
 }
+function Compare-Files {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$File1,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$File2
+    )
+    
+    # Ensure the files exist
+    if (-not (Test-Path -Path $File1)) {
+        throw "File not found: $File1"
+    }
+    
+    if (-not (Test-Path -Path $File2)) {
+        throw "File not found: $File2"
+    }
+    
+    # Get full paths to avoid any path-related issues
+    $fullPath1 = (Resolve-Path $File1).Path
+    $fullPath2 = (Resolve-Path $File2).Path
+    
+    # Use git diff with -w to ignore all whitespace differences (including BOMs)
+    $result = git diff --no-index --exit-code -w $fullPath1 $fullPath2 2>&1
+    
+    # Git returns exit code 0 if files are identical, 1 if different
+    # Return $true if files are the same (ignoring BOMs)
+    return ($LASTEXITCODE -eq 0)
+}
+
 
 function Ensure-ItemDirectory {
     param($itemType, $relativePath)
@@ -851,17 +881,17 @@ foreach ($cs in $sortedHistory) {
 
                 # Check resulting file 
                 if (-not $fileDeleted) {
-                    $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
                     $tmpFileName = "$env:TEMP\$relativePath"
                     $changeItem.DownloadFile($tmpFileName)
-                    $tmpFileHash = Get-NormalizedHash -FilePath $tmpFileName
-                    remove-item -path $tmpFileName -force -erroraction SilentlyContinue
-                    if ($checkedFileHash -ne $tmpFileHash) {
+                    if (-not (Compare-Files -file1 $relativePath -file2 $tmpFileName)) {
                         Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Quality Control - File hash mismatch" -ForegroundColor Red
                         Write-Host $tmpFileName
                         throw "stop here"
                     }
+                    remove-item -path $tmpFileName -force -erroraction SilentlyContinue
                 } else {
+
+                    # Check if deleted file is still present
                     if (Test-Path -path $relativePath) {
                         Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Quality Control - File still exists" -ForegroundColor Red
                         throw "stop here"
