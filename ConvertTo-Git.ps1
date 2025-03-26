@@ -836,9 +836,7 @@ foreach ($cs in $sortedHistory) {
 
 
             # QUALITY CONTROL: 
-            if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) -and
-                # Skip delete, as there is no file left
-                -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete)) {
+            if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder)) {
 
                 Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - QC Processing"
 
