@@ -837,27 +837,31 @@ foreach ($cs in $sortedHistory) {
 
             # QUALITY CONTROL: 
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) -and
-                # Skip QC for Delete with rename
-                -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) -and 
-                # Skip QC for Delete with rollback
-                -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rollback) -and 
-                # Skip QC for Delete only
-                -not ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete))) {
+                # Skip delete, as there is no file left
+                -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete)) {
 
                 Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - QC Processing"
-                $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
-                $tmpFileName = "$env:TEMP\$relativePath"
-                $changeItem.DownloadFile($tmpFileName)
-                $tmpFileHash = Get-NormalizedHash -FilePath $tmpFileName
 
-                if ($checkedFileHash -ne $tmpFileHash) {
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Quality Control - File hash mismatch" -ForegroundColor Red
-                    Write-Host $tmpFileName
-                    throw "stop here"
+                if (-not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete)) {
+                    $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
+                    $tmpFileName = "$env:TEMP\$relativePath"
+                    $changeItem.DownloadFile($tmpFileName)
+                    $tmpFileHash = Get-NormalizedHash -FilePath $tmpFileName
+                    remove-item -path $tmpFileName -force -erroraction SilentlyContinue
+                    if ($checkedFileHash -ne $tmpFileHash) {
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Quality Control - File hash mismatch" -ForegroundColor Red
+                        Write-Host $tmpFileName
+                        throw "stop here"
+                    }
+                } else {
+                    if (Test-Path -path $relativePath) {
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Quality Control - File still exists" -ForegroundColor Red
+                        throw "stop here"
+                    }
                 }
-
+                
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC Pass" -ForegroundColor Gray
-                remove-item -path $tmpFileName -force
+            
 
             } 
               
