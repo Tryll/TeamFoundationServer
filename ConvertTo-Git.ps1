@@ -712,6 +712,9 @@ foreach ($cs in $sortedHistory) {
                     # CHECKOUT from hash, it that exists - else file is local to branch:
                     if ($sourcehash -ne $null) {
                         Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
+                        $originalPreference = $ErrorActionPreference
+                        $ErrorActionPreference = 'Continue'
+
                         $out=git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
                             # file was not found, attempt undelete, it will have to pass QC
@@ -723,6 +726,7 @@ foreach ($cs in $sortedHistory) {
                             }
                             Write-Verbose "$sourceRelativePath was undeleted from parent to $sourcehash : $out"
                         }
+                        $ErrorActionPreference = $originalPreference
                     }
                     
 
