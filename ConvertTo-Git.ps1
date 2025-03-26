@@ -27,7 +27,7 @@
     The name of the TFS primary project branch and the default Git branch name.
     Defaults to "main" if not specified.
 
-.PARAMETER ContinueFromId
+.PARAMETER FromChangesetId
     Starting changeset ID for migration. If specified, only changes from this ID forward will be processed.
     Defaults to 0 (process all changesets).
 
@@ -75,7 +75,7 @@
 
 .EXAMPLE
     # Starting migration from a specific changeset:
-    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://dev.azure.com/organization" -ContinueFromId 1000 -UsePAT -AccessToken "your-personal-access-token"
+    .\ConvertTo-Git.ps1 -TfsProject "$/ProjectName" -OutputPath "C:\OutputFolder" -TfsCollection "https://dev.azure.com/organization" -FromChangesetId 1000 -UsePAT -AccessToken "your-personal-access-token"
 
 .EXAMPLE
     # Using quality control for data verification:
@@ -134,7 +134,7 @@ param(
     [string]$PrimaryBranchName = "main",
 
     [Parameter(Mandatory=$false)]
-    [int]$ContinueFromId = 0,
+    [int]$FromChangesetId = 0,
 
     # Quality control effectively checks every iteration of a file, this will slow down the process, but ensure the files are correct.
     [Parameter(Mandatory=$false)]
@@ -299,7 +299,7 @@ function Get-CommitFileName {
     }
 
     # Add the deleted to the list of available names to recover
-    $deleted = git show --name-status $commit | % { $f=$_.Split("`t"); $f[1..2] }
+    $deleted = git show --name-status $hash | Where-Object { $_ -match "^D\s+" } | ForEach-Object { ($_ -split "\s+", 2)[1] }
     $out = $out + $deleted | select-object -unique
 
     # Files will come first in the reverse order before hitting empty lines/git comment
@@ -547,8 +547,8 @@ $branchCount = 0
 
 
 $fromVersion = $null
-if ($ContinueFromId -gt 0) {
-    $fromVersion = new-object Microsoft.TeamFoundation.VersionControl.Client.ChangesetVersionSpec $ContinueFromId
+if ($FromChangesetId -gt 0) {
+    $fromVersion = new-object Microsoft.TeamFoundation.VersionControl.Client.ChangesetVersionSpec $FromChangesetId
 }
 
 # DOWNLOAD all TFS Project history
@@ -577,7 +577,6 @@ $processedItems = 0
 
 $branchHashTracker = @{}
 
-
 # Process each changeset
 foreach ($cs in $sortedHistory) {
     $processedChangesets++
@@ -604,8 +603,7 @@ foreach ($cs in $sortedHistory) {
     $changeCounter=0
     $changesetId=0
     $relativePath =""
-
-
+        
     foreach ($change in $changes) {
 
         $changeCounter++
@@ -673,7 +671,8 @@ foreach ($cs in $sortedHistory) {
                  $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch -or
                  $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -or
                  $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename -or
-                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Undelete)) {
+                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Undelete -or
+                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rollback  )) {
                 
                 # The change item is a branch/merge with a source reference
                 if ($change.MergeSources.Count -gt 0) {
@@ -812,7 +811,8 @@ foreach ($cs in $sortedHistory) {
 
             # Remove file, as last step, but not on undelete/SourceRename
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and
-                 -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
+                 -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)-and
+                 -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rollback)) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting" -ForegroundColor Gray
                 # Remove the file or directory
                 $out=git rm -f "$relativePath" 2>&1
@@ -838,14 +838,10 @@ foreach ($cs in $sortedHistory) {
 
             # QUALITY CONTROL: 
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) -and
-                # Direct Delete items
-                -not ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete)) -and
-                # Skip QC for Delete with Rename or Merge or Branch
-                (-not (($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and 
-                            ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -or 
-                             $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -or 
-                             $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Branch))) 
-                )) {
+                # Skip QC for Delete, but keep undelete
+                -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) -and 
+                # Skip QC for Delete only
+                -not ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete))) {
 
                 Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - QC Processing"
                 $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
