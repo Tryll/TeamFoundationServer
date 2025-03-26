@@ -811,8 +811,7 @@ foreach ($cs in $sortedHistory) {
 
             # Remove file, as last step, but not on undelete/SourceRename
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and
-                 -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)-and
-                 -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rollback)) {
+                 -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting" -ForegroundColor Gray
                 # Remove the file or directory
                 $out=git rm -f "$relativePath" 2>&1
@@ -838,8 +837,10 @@ foreach ($cs in $sortedHistory) {
 
             # QUALITY CONTROL: 
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) -and
-                # Skip QC for Delete, but keep undelete
+                # Skip QC for Delete with rename
                 -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) -and 
+                # Skip QC for Delete with rollback
+                -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rollback) -and 
                 # Skip QC for Delete only
                 -not ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete))) {
 
