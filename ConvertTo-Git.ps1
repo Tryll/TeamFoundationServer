@@ -615,6 +615,7 @@ foreach ($cs in $sortedHistory) {
         $itemPath = $changeItem.ServerItem
         $processedItems++
         $forceAddNoSource = $false
+        $fileDeleted = $false
 
         # Abort on mysterious change
         if ($change.MergeSources.Count -gt 1) {
@@ -815,6 +816,8 @@ foreach ($cs in $sortedHistory) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting" -ForegroundColor Gray
                 # Remove the file or directory
                 $out=git rm -f "$relativePath" 2>&1
+                
+                $fileDeleted = $true
                 if ($out -is [System.Management.Automation.ErrorRecord]) {
                     if ( $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
                         Write-Verbose " [TFS-$changesetId] Ignorning missing $relativePath in changeset"
@@ -840,7 +843,8 @@ foreach ($cs in $sortedHistory) {
 
                 Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - QC Processing"
 
-                if (-not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete)) {
+                # Check resulting file 
+                if (-not $fileDeleted) {
                     $checkedFileHash = Get-NormalizedHash -FilePath $relativePath
                     $tmpFileName = "$env:TEMP\$relativePath"
                     $changeItem.DownloadFile($tmpFileName)
