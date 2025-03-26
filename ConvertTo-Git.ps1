@@ -719,6 +719,57 @@ foreach ($cs in $sortedHistory) {
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash]" -ForegroundColor Gray
           
 
+                    # Check if we are merging from another branch in the same changeset, this case would not allow checkout to function properly
+                    if ($changesetId -eq  $sourceChangesetId -and $branchName -ne $sourceBranchName -and $sourceHash -eq $null) {
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Precommit reference ot inchangeset banch, commiting early"
+                 
+                        pop-location # Exit current branch
+
+                        try {
+                            # Set environment variables for commit author and date
+                            $env:GIT_AUTHOR_NAME = $changeset.OwnerDisplayName
+                            $env:GIT_AUTHOR_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
+                            $env:GIT_AUTHOR_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
+                            $env:GIT_COMMITTER_NAME = $changeset.OwnerDisplayName
+                            $env:GIT_COMMITTER_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
+                            $env:GIT_COMMITTER_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
+                    
+                          
+                            # Enter source branch for early commit
+                            push-location $sourceBranchName
+                            git add -A
+                            $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
+                            git commit -m $commitMessage --allow-empty
+                            $sourcehash = git rev-parse HEAD
+                            $branchHashTracker["$sourceBranchName-$changesetId"] = $sourcehash
+                            Write-Host "[TFS-$changesetId] [$sourceBranchName-] [$sourcehash] Comitted" -ForegroundColor Gray
+                            pop-location #sourceBranchName
+
+                            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] Precommit update!" -ForegroundColor Gray
+          
+                        } finally {
+                    
+                            # Clean up environment variables
+                            Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
+                            Remove-Item Env:\GIT_AUTHOR_EMAIL -ErrorAction SilentlyContinue
+                            Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
+                            Remove-Item Env:\GIT_COMMITTER_NAME -ErrorAction SilentlyContinue
+                            Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
+                            Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
+                        }
+
+                        # Source branch dont need changeset finalization commit.
+                        # IF this comes again, we'll overwrite branchHashTracker and be unable to refer to earlier commits from tfs.
+                        # Expecting TFS to submitt its changes in sequence, so that this does not happen!
+                        $branchChanges.Remove($sourceBranchName)
+                        
+                        # Reenter branch
+                        push-location $branchName
+
+                    }
+                    
+
+
                     # Takes current branch head, incase we need to revert a file
                     $backupHead = $null
                     # Do not restore backup if move is in same changeset/branch/commit, the rename is rename
@@ -728,7 +779,8 @@ foreach ($cs in $sortedHistory) {
                         $backupHead = git rev-parse HEAD  
                     }
                     
-
+                    
+                    # What do we do for branches created in same changeset that we want to copy from here!
 
                     # CHECKOUT from hash, it that exists - else file is local to branch:
                     if ($sourcehash -ne $null) {
