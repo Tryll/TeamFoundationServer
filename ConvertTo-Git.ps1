@@ -986,8 +986,14 @@ foreach ($cs in $sortedHistory) {
             $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
             
             # Make the commit
+            $originalPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+
+                    
             git commit -m $commitMessage --allow-empty 2>&1 | Out-Host
             $hash = git rev-parse HEAD  
+            $ErrorActionPreference  = $originalPreference
+
 
             $branchHashTracker["$branch-$changesetId"] =  $hash
             Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted" -ForegroundColor Gray
