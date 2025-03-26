@@ -745,8 +745,15 @@ foreach ($cs in $sortedHistory) {
                             Write-Host "[TFS-$changesetId] [$sourceBranchName-] [$sourcehash] Comitted" -ForegroundColor Gray
                             pop-location #sourceBranchName
 
-                            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] Precommit update!" -ForegroundColor Gray
+                            # Ensuring sourceRelativePath refers to the corrected filename
+                            $sourceRelativePath = Get-CommitFileName -commit  $sourcehash -path $sourceRelativePath
+
+                            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] Commit updated!" -ForegroundColor Gray
           
+
+                            
+                            
+
                         } finally {
                     
                             # Clean up environment variables
