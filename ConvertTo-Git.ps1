@@ -715,6 +715,8 @@ foreach ($cs in $sortedHistory) {
                         $out=git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
                             # file was not found, attempt undelete, it will have to pass QC
+                            Write-Verbose "Checking out $sourceRelativePath from $sourcehash ^1"
+
                             $out=git checkout -f $sourcehash^1 -- "$sourceRelativePath" 2>&1
                             if ($out -is [System.Management.Automation.ErrorRecord]) {
                                 throw $out
@@ -802,12 +804,12 @@ foreach ($cs in $sortedHistory) {
                     throw("Failed to download $itemPath to $relativePath")
                 }
 
+                
                 $out=git add "$relativePath" 2>&1
                 if ($out -is [System.Management.Automation.ErrorRecord]) {
                     Write-Error "Git add $relativePath failed, for $($target.FullName)"
                     throw $out
                 }
-
             }
 
             # Remove file, as last step, but not on undelete/SourceRename
@@ -816,7 +818,7 @@ foreach ($cs in $sortedHistory) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting" -ForegroundColor Gray
                 # Remove the file or directory
                 $out=git rm -f "$relativePath" 2>&1
-                
+
                 $fileDeleted = $true
                 if ($out -is [System.Management.Automation.ErrorRecord]) {
                     if ( $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
