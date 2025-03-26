@@ -301,7 +301,7 @@ function Get-CommitFileName {
     # Add the deleted to the list of available names to recover
     $deleted = git show --name-status $commit | % { $f=$_.Split("`t"); $f[1..2] }
     $out = $out + $deleted | select-object -unique
-    
+
     # Files will come first in the reverse order before hitting empty lines/git comment
     foreach ($file in $out) {
       
@@ -797,17 +797,17 @@ foreach ($cs in $sortedHistory) {
                 
                     $changeItem.DownloadFile($target.FullName)
 
-                    $out=git add "$relativePath" 2>&1
-                    if ($out -is [System.Management.Automation.ErrorRecord]) {
-                        Write-Error "Git add $relativePath failed, for $($target.FullName)"
-                        throw $out
-                    }
-
-
                 } catch {
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId] to $relativePath : $_" -ForegroundColor Red
                     throw("Failed to download $itemPath to $relativePath")
                 }
+
+                $out=git add "$relativePath" 2>&1
+                if ($out -is [System.Management.Automation.ErrorRecord]) {
+                    Write-Error "Git add $relativePath failed, for $($target.FullName)"
+                    throw $out
+                }
+
             }
 
             # Remove file, as last step, but not on undelete/SourceRename
