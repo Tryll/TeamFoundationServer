@@ -555,8 +555,8 @@ git config core.autocrlf false
 git config core.longpaths true
 # Old TFS checkins are case-insensitive, so we need to ignore case.
 git config core.ignoreCase true
-# Configure git to not treat file names in a special way with quotes
-git config --global core.quotepath false
+# Disable special unicode file name treatments
+git config core.quotepath false
 
 
 
