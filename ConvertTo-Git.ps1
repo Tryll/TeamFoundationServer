@@ -959,7 +959,7 @@ foreach ($cs in $sortedHistory) {
                         }
 
                         if (-not (Compare-Files -file1 $relativePath -file2 $tmpFileName)) {
-                            Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File hash mismatch"
+                            Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File hash mismatch ($originalFileLength vs $downloadedFileLength), ignoring"
                             Write-Host $tmpFileName
                             throw "stop here"
                         }
