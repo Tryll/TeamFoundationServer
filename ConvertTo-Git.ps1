@@ -733,7 +733,7 @@ foreach ($cs in $sortedHistory) {
                             # Case insensitive search to find the correct file name for source file:
                             $sourceRelativePath  = $commitFileTracker["$sourceBranchName-$sourceChangesetId"] | where { $_ -eq $sourceRelativePath }
                             if ($sourceRelativePath -eq $null) {
-                                Write-Verbose $commitFileTracker["$sourceBranchName-$sourceChangesetId"]
+                                $commitFileTracker["$sourceBranchName-$sourceChangesetId"]
                                 Write-Verbose "Original filename for [$sourceBranchName] [$sourceChangesetId] $sourceRelativePath was not found"
                                 throw("unable to find original file name")
                             }
@@ -975,7 +975,7 @@ foreach ($cs in $sortedHistory) {
                             Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Unable to download file from TFS, ignoring" 
                             $qcStatus = "Failed & Ignored"
                         }
-                        
+
                     } else {
                         # We have downloaded the file, so we dont need check it by downloading it again
                         $qcStatus = "N/A"
