@@ -922,13 +922,7 @@ foreach ($cs in $sortedHistory) {
 
                 $fileDeleted = $true
                 if ($out -is [System.Management.Automation.ErrorRecord]) {
-                    if ( $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
-                        Write-Verbose " [TFS-$changesetId] Ignorning missing $relativePath in changeset"
-                    } else {
-                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File allready deleted/missing. (TFS Supported)" 
-        #                Write-Error "Git rm $relativePath failed"
-        #                throw $out
-                    }
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File allready deleted/missing. (TFS Supported)" 
                 } 
 
             }
