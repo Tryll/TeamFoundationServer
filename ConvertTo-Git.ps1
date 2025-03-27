@@ -297,64 +297,7 @@ function Ensure-ItemDirectory {
     return $itemFolder
 }
 
-# Get-CommitFileName: Case-insensitive search for files in Git commits.
-# Returns properly-cased filename from a specific commit.
-# Usage: $filename = Get-CommitFileName -commit "a1b2c3d" -path "readme.md"
-# Then: git checkout a1b2c3d -- $filename
-# Parameters: commit (hash), path (filename to find), insensitive (default: true)
-function Get-CommitFileName {
-    param(
-        [Parameter(Mandatory=$true)]
-        [string]$commit,
-        
-        [Parameter(Mandatory=$true)]
-        [string]$path,
-        
-        [switch]$insensitive = $true
-    )
-    $path =$path.replace("\", "/")
 
-    $originalPreference = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-
-    # Use git show instead of git log to target a specific commit
-    $out = git ls-tree -r --name-only $commit 2>&1
-    if ($out -is [System.Management.Automation.ErrorRecord]) {
-        throw $out
-    }
-    $ErrorActionPreference = $originalPreference
-    
-    # Add the deleted to the list of available names to recover
-    $deleted = git show --name-status $commit | % { $f=$_.Split("`t"); $f[1..2] }
-    $out = $out + $deleted | select-object -unique
-
-
-  
-
-    # Files will come first in the reverse order before hitting empty lines/git comment
-    foreach ($file in $out) {
-      
-        # Case-insensitive comparison
-        if ($insensitive) {
-            if ([string]::Equals($file, $path, [StringComparison]::OrdinalIgnoreCase)) {
-                if ($file -ne $path) {
-                    Write-Verbose "Get-CommitFileName: Found Git commited cased file name '$file' for '$path'"
-                }
-                return $file
-            }
-        } else {
-            if ($file -eq $path) {
-                return $file
-            }
-        }
-        
-    }
-
-    # Not found - show the full commit info for debugging
-    Write-Verbose ($out | convertto-json)
-    $str="Get-CommitFileName: '$path' not found in commit $commit"
-    throw($str)
-}
 
 
 function Get-SourceItem {
@@ -402,7 +345,13 @@ function Get-SourceItem {
 
     # This may fail if a changeset has an add and an move in it of the same file, but it is a rare case.
     if ($Source.Hash -ne $null) {
-        $Source.RelativePath  = Get-CommitFileName -commit $Source.Hash -path $Source.RelativePath 
+        # Case insensitive search to find the correct file name for source file:
+        $Source.RelativePath  = $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"] | where { $_ -eq $Source.RelativePath }
+        if ($Source.RelativePath -eq $null) {
+            Write-Verbose  $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"]
+            Write-Verbose "Get-SourceItem: Original filename for [$($Source.BranchName)] [$($Source.ChangesetId)] $($Source.RelativePath) was not found"
+            throw("unable to find original file name")
+        }
     }
 
     return $Source
@@ -610,6 +559,10 @@ $processedItems = 0
 
 $branchHashTracker = @{}
 
+# "$Branch-$CommitId"=>@( list of files involed )
+# This will help to avoid quering git for each file in a commit, it will be faster but consume memory.
+$commitFileTracker =@{}
+
 # Process each changeset
 foreach ($cs in $sortedHistory) {
     $processedChangesets++
@@ -696,6 +649,17 @@ foreach ($cs in $sortedHistory) {
         push-location $branchName
         $branchChanges[$branchName] = $true
 
+        # Track files in commit for file name identification, as TFS is not case sensitive
+        if (-not $commitFileTracker.ContainsKey("$branchName-$changesetId")) {
+            # Initialize branch commit
+            $commitFileTracker["$branchName-$changesetId"]= @()
+        }
+        # Only track files
+        if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
+            $commitFileTracker["$branchName-$changesetId"] += $relativePath
+        }
+
+
         try { #  try/finally for pop-location and  quality control
 
 
@@ -759,9 +723,14 @@ foreach ($cs in $sortedHistory) {
                             $branchHashTracker["$sourceBranchName-$changesetId"] = $sourcehash
                             Write-Host "[TFS-$changesetId] [$sourceBranchName] [$sourcehash] Comitted" -ForegroundColor Gray
 
-                            # Ensuring sourceRelativePath refers to the corrected filename
-                            $sourceRelativePath = Get-CommitFileName -commit $sourcehash -path $sourceRelativePath
-                            
+
+                            # Case insensitive search to find the correct file name for source file:
+                            $sourceRelativePath  = $commitFileTracker["$sourceBranchName-$sourceChangesetId"] | where { $_ -eq $sourceRelativePath }
+                            if ($sourceRelativePath -eq $null) {
+                                Write-Verbose $commitFileTracker["$sourceBranchName-$sourceChangesetId"]
+                                Write-Verbose "Original filename for [$sourceBranchName] [$sourceChangesetId] $sourceRelativePath was not found"
+                                throw("unable to find original file name")
+                            }
                             pop-location #sourceBranchName
                  
                             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] Commit updated!" -ForegroundColor Gray
@@ -948,17 +917,16 @@ foreach ($cs in $sortedHistory) {
                 # Check resulting file 
                 if (-not $fileDeleted) {
                     $tmpFileName = "$env:TEMP\$relativePath"
-
-                    # To be sure its not there from a previous run
-                    ri -path $tmpFileName -force  -erroraction SilentlyContinue
-
                     $changeItem.DownloadFile($tmpFileName)
+
+                    # Check that we actually got a file and its state:
                     if (Test-Path -path $tmpFileName) {
                         
                         $originalFileLength = (Get-Item -Path $relativePath).Length
                         $downloadedFileLength = (Get-Item -Path $tmpFileName).Length
                             
                         if ($originalFileLength -gt 0 -and $downloadedFileLength -eq 0) {
+                            # Based on current understanding, after review, this is a TFS inconsistency, and the file is not present after after tfs dump either. Ignoring
                             Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Downloaded 0 bytes from TFS, ignoring/corrupt TFS" 
                         }
 
