@@ -965,7 +965,7 @@ foreach ($cs in $sortedHistory) {
                         }
                         remove-item -path $tmpFileName -force -erroraction SilentlyContinue
                     } else {
-                        Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Unable to download file from TFS" -ForegroundColor Red
+                        Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Unable to download file from TFS, ignoring" -ForegroundColor Red
                     }
                 } else {
 
