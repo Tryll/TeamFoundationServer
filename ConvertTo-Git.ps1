@@ -357,6 +357,34 @@ function Get-SourceItem {
     return $Source
 }
 
+function Get-CaseSensitivePath {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$FullPath
+    )
+    
+    $root = [System.IO.Path]::GetPathRoot($FullPath)
+    
+    try {
+        $relativePath = $FullPath.Substring($root.Length)
+        foreach ($name in $relativePath.Split([System.IO.Path]::DirectorySeparatorChar, [StringSplitOptions]::RemoveEmptyEntries)) {
+            $entries = [System.IO.Directory]::GetFileSystemEntries($root, $name)
+            if ($entries.Length -gt 0) {
+                $root = $entries[0]
+            } else {
+                throw "Path segment not found: $name"
+            }
+        }
+    }
+    catch {
+        # Fallback to original path
+        $root += $FullPath.Substring($root.Length)
+        Write-Verbose "Path not found: $Path"
+    }
+    
+    return $root
+}
+
 #endregion
 
 
@@ -650,15 +678,12 @@ foreach ($cs in $sortedHistory) {
         $branchChanges[$branchName] = $true
 
         # Track files in commit for file name identification, as TFS is not case sensitive
+        # Tracks files in finally, after creation
         if (-not $commitFileTracker.ContainsKey("$branchName-$changesetId")) {
             # Initialize branch commit
             $commitFileTracker["$branchName-$changesetId"]= @()
         }
-        # Only track files
-        if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
-            $commitFileTracker["$branchName-$changesetId"] += $relativePath
-        }
-
+    
 
         try { #  try/finally for pop-location and  quality control
 
@@ -908,6 +933,18 @@ foreach ($cs in $sortedHistory) {
 
         } finally {
 
+            # Track changed files
+    
+            if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
+                # If the file exists, get its real case-sensitive path and track that for this commit (will be used as sourceRelativePath)
+                if (Test-Path -path $relativePath) {
+                    $realPath = Get-CaseSensitivePath -FullPath (Join-path -path (pwd) -childpath $relativePath)
+                    $realRelativePath = $realPath.SubString((pwd).Path.Length+1)
+                    $commitFileTracker["$branchName-$changesetId"] += $realRelativePath
+                }
+            }
+
+
 
             # QUALITY CONTROL: 
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder)) {
@@ -916,10 +953,12 @@ foreach ($cs in $sortedHistory) {
 
                 # Check resulting file 
                 if (-not $fileDeleted) {
-                    $tmpFileName = "$env:TEMP\$relativePath"
-                    $changeItem.DownloadFile($tmpFileName)
+                    $tmpFileName = "$env:TEMP\QCFile.tmp"
 
-                    # Check that we actually got a file and its state:
+                    # Ensure previous file is not present
+                    remote-item -path $tmpFileName -force -erroraction SilentlyContinue
+
+                    $changeItem.DownloadFile($tmpFileName)
                     if (Test-Path -path $tmpFileName) {
                         
                         $originalFileLength = (Get-Item -Path $relativePath).Length
