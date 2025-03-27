@@ -949,17 +949,29 @@ foreach ($cs in $sortedHistory) {
                 if (-not $fileDeleted) {
                     $tmpFileName = "$env:TEMP\$relativePath"
                     $changeItem.DownloadFile($tmpFileName)
-                    if (-not (Compare-Files -file1 $relativePath -file2 $tmpFileName)) {
-                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Quality Control - File hash mismatch" -ForegroundColor Red
-                        Write-Host $tmpFileName
-                        throw "stop here"
+                    if (Test-Path -path $tmpFileName) {
+                        
+                        $originalFileLength = (Get-Item -Path $relativePath).Length
+                        $downloadedFileLength = (Get-Item -Path $tmpFileName).Length
+                            
+                        if ($originalFileLength -gt 0 -and $downloadedFileLength -eq 0) {
+                            Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Downloaded 0 bytes from TFS, ignoring/corrupt TFS" -ForegroundColor Red
+                        }
+
+                        if (-not (Compare-Files -file1 $relativePath -file2 $tmpFileName)) {
+                            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File hash mismatch" -ForegroundColor Red
+                            Write-Host $tmpFileName
+                            throw "stop here"
+                        }
+                        remove-item -path $tmpFileName -force -erroraction SilentlyContinue
+                    } else {
+                        Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Unable to download file from TFS" -ForegroundColor Red
                     }
-                    remove-item -path $tmpFileName -force -erroraction SilentlyContinue
                 } else {
 
                     # Check if deleted file is still present
                     if (Test-Path -path $relativePath) {
-                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Quality Control - File still exists" -ForegroundColor Red
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File still exists" -ForegroundColor Red
                         throw "stop here"
                     }
                 }
