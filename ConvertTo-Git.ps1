@@ -280,26 +280,6 @@ function Compare-Files {
 }
 
 
-function Ensure-ItemDirectory {
-    param($itemType, $relativePath)
-
-    $itemFolder = "."
-    if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
-        $itemFolder = $relativePath 
-    } else {
-        $itemFolder = (Split-Path -Path $relativePath -Parent)
-    } 
-    # Create directory if it does not exist
-    if (-not (Test-Path -Path $itemFolder)) {
-        New-Item -Path (Join-Path $itemFolder '.gitkeep') -ItemType File -Force | Out-Null
-    }
-   
-    return $itemFolder
-}
-
-
-
-
 function Get-SourceItem {
     param($change, $changesetId)
 
@@ -821,11 +801,12 @@ foreach ($cs in $sortedHistory) {
                     # CHECKOUT RENAME: Source and Destination is not the same : (GIT PROBLEMS:)
                     if ($sourceRelativePath -ne $relativePath) {
 
-                        $dir=Ensure-ItemDirectory $itemType $relativePath
+                   
                         Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
 
-                        #Ensure file it self does not exist, git mv tends to throw a problem around overwrite
-                        remove-item -path $relativePath -force -erroraction SilentlyContinue
+                        # Ensure folder structure exists, and remove the target file
+                        new-item -path $relativePath -type file -force  -erroraction SilentlyContinue | Out-Null
+                        remove-item -path $relativePath -force -erroraction SilentlyContinue | Out-Null
 
                         # Move source to target
                         $out = git mv -f "$sourceRelativePath" "$relativePath" 2>&1
@@ -869,8 +850,7 @@ foreach ($cs in $sortedHistory) {
                     continue
                 }
                 
-
-                $d=Ensure-ItemDirectory $itemType $relativePath
+                new-item -path $relativePath -type directory -force -erroraction SilentlyContinue | Out-Null
 
                 # Next item!
                 continue
@@ -887,9 +867,15 @@ foreach ($cs in $sortedHistory) {
 
                 try {
                     # Creates the target file and directory structure
-                    $target = New-Item -Path $relativePath -ItemType File -Force
+                    $target = new-item -path $relativePath -itemType File -force -erroraction silentlycontinue
+                    remove-item -path $relativePath
                 
                     $changeItem.DownloadFile($target.FullName)
+
+                    if (-not (Test-Path -path $target.FullName)) {
+                        Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Download failed, file not found"
+                        throw "stop here"
+                    }
 
                 } catch {
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId] to $relativePath : $_" -ForegroundColor Red
@@ -956,7 +942,7 @@ foreach ($cs in $sortedHistory) {
                     $tmpFileName = "$env:TEMP\QCFile.tmp"
 
                     # Ensure previous file is not present
-                    remote-item -path $tmpFileName -force -erroraction SilentlyContinue
+                    remove-item -path $tmpFileName -force -erroraction SilentlyContinue
 
                     $changeItem.DownloadFile($tmpFileName)
                     if (Test-Path -path $tmpFileName) {
