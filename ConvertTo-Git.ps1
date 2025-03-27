@@ -328,7 +328,7 @@ function Get-SourceItem {
         # Case insensitive search to find the correct file name for source file:
         $Source.RelativePath  = $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"] | where { $_ -eq $Source.RelativePath }
         if ($Source.RelativePath -eq $null) {
-            Write-Verbose  $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"]
+            $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"]
             Write-Verbose "Get-SourceItem: Original filename for [$($Source.BranchName)] [$($Source.ChangesetId)] $($Source.RelativePath) was not found"
             throw("unable to find original file name")
         }
