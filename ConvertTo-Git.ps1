@@ -610,6 +610,7 @@ foreach ($cs in $sortedHistory) {
         $processedItems++
         $forceAddNoSource = $false
         $fileDeleted = $false
+        $fileDownloaded = $true
 
         # Abort on mysterious change
         if ($change.MergeSources.Count -gt 1) {
@@ -877,6 +878,10 @@ foreach ($cs in $sortedHistory) {
                         throw "stop here"
                     }
 
+                    
+                    $fileDownloaded = $true
+                    
+
                 } catch {
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId] to $relativePath : $_" -ForegroundColor Red
                     throw("Failed to download $itemPath to $relativePath")
@@ -938,31 +943,42 @@ foreach ($cs in $sortedHistory) {
                 Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - QC Processing"
 
                 # Check resulting file 
+                $qcStatus ="Pass"
                 if (-not $fileDeleted) {
-                    $tmpFileName = "$env:TEMP\QCFile.tmp"
+                    if (-not $fileDownloaded) {
+                        $tmpFileName = "$env:TEMP\QCFile.tmp"
 
-                    # Ensure previous file is not present
-                    remove-item -path $tmpFileName -force -erroraction SilentlyContinue
-
-                    $changeItem.DownloadFile($tmpFileName)
-                    if (Test-Path -path $tmpFileName) {
-                        
-                        $originalFileLength = (Get-Item -Path $relativePath).Length
-                        $downloadedFileLength = (Get-Item -Path $tmpFileName).Length
-                            
-                        if ($originalFileLength -gt 0 -and $downloadedFileLength -eq 0) {
-                            # Based on current understanding, after review, this is a TFS inconsistency, and the file is not present after after tfs dump either. Ignoring
-                            Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Downloaded 0 bytes from TFS, ignoring/corrupt TFS" 
-                        }
-
-                        if (-not (Compare-Files -file1 $relativePath -file2 $tmpFileName)) {
-                            Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File hash mismatch ($originalFileLength vs $downloadedFileLength), ignoring"
-                            Write-Host $tmpFileName
-                            throw "stop here"
-                        }
+                        # Ensure previous file is not present
                         remove-item -path $tmpFileName -force -erroraction SilentlyContinue
+
+                        $changeItem.DownloadFile($tmpFileName)
+                        if (Test-Path -path $tmpFileName) {
+                            
+                            $originalFileLength = (Get-Item -Path $relativePath).Length
+                            $downloadedFileLength = (Get-Item -Path $tmpFileName).Length
+                                
+                            if ($originalFileLength -gt 0 -and $downloadedFileLength -eq 0) {
+                                # Based on current understanding, after review, this is a TFS inconsistency, and the file is not present after after tfs dump either. Ignoring
+                                Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Downloaded 0 bytes from TFS, ignoring/corrupt TFS" 
+                                $qcStatus = "Failed & Ignored"
+                            }
+
+                            if (-not (Compare-Files -file1 $relativePath -file2 $tmpFileName)) {
+                                Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File hash mismatch ($originalFileLength vs $downloadedFileLength), ignoring"
+                                Write-Host $tmpFileName
+                                throw "stop here"
+                            }
+
+                            # Cleanup
+                            remove-item -path $tmpFileName -force -erroraction SilentlyContinue
+                        } else {
+                            Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Unable to download file from TFS, ignoring" 
+                            $qcStatus = "Failed & Ignored"
+                        }
+                        
                     } else {
-                        Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Unable to download file from TFS, ignoring" 
+                        # We have downloaded the file, so we dont need check it by downloading it again
+                        $qcStatus = "N/A"
                     }
                 } else {
 
@@ -973,7 +989,7 @@ foreach ($cs in $sortedHistory) {
                     }
                 }
                 
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC Pass" -ForegroundColor Gray
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC $qcStatus" -ForegroundColor Gray
             
 
             } 
