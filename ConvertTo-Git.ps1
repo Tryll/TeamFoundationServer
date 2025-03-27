@@ -910,16 +910,24 @@ foreach ($cs in $sortedHistory) {
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and
                  -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting" -ForegroundColor Gray
+
+                # Make the delete
+                $originalPreference = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+
                 # Remove the file or directory
                 $out=git rm -f "$relativePath" 2>&1
+                
+                $ErrorActionPreference = $originalPreference
 
                 $fileDeleted = $true
                 if ($out -is [System.Management.Automation.ErrorRecord]) {
                     if ( $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) {
                         Write-Verbose " [TFS-$changesetId] Ignorning missing $relativePath in changeset"
                     } else {
-                        Write-Error "Git rm $relativePath failed"
-                        throw $out
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File allready deleted/missing. (TFS Supported)" 
+        #                Write-Error "Git rm $relativePath failed"
+        #                throw $out
                     }
                 } 
 
