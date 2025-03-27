@@ -948,6 +948,10 @@ foreach ($cs in $sortedHistory) {
                 # Check resulting file 
                 if (-not $fileDeleted) {
                     $tmpFileName = "$env:TEMP\$relativePath"
+                    
+                    # To be sure its not there from a previous run
+                    ri -path $tmpFileName -force -recurse -erroraction SilentlyContinue
+
                     $changeItem.DownloadFile($tmpFileName)
                     if (Test-Path -path $tmpFileName) {
                         
