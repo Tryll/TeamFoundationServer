@@ -994,8 +994,12 @@ foreach ($cs in $sortedHistory) {
                                 $qcStatus = "Failed & Ignored"
                             } else {
                                 if (-not (Compare-Files -file1 $relativePath -file2 $tmpFileName)) {
-                                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File hash mismatch ($originalFileLength vs $downloadedFileLength), ignoring"
+                                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File hash mismatch ($originalFileLength vs $downloadedFileLength)"
+                                    Write-Verbose ($change | convertto-json)
+                                                                        
                                     Write-Host $tmpFileName
+                                    Write-Host (get-content $tmpFileName)
+                                    
                                     throw "stop here"
                                 }
                             }
