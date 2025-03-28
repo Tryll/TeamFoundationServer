@@ -326,11 +326,12 @@ function Get-SourceItem {
     # This may fail if a changeset has an add and an move in it of the same file, but it is a rare case.
     if ($Source.Hash -ne $null) {
         # Case insensitive search to find the correct file name for source file:
-        $origSourceName = $Source.RelativePath
+        $origSourceName = "file: "+$Source.RelativePath
         $Source.RelativePath  = $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"] | where { $_ -eq $Source.RelativePath }
         if ($Source.RelativePath -eq $null) {
+            Write-Verbose "[$($Source.BranchName)-$($Source.ChangesetId)] - currently tracked files:"
             $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"] | % { write-verbose $_ }
-            Write-Verbose "Get-SourceItem: Original filename for [$($Source.BranchName)] [$($Source.ChangesetId)] $origSourceName  was not found"
+            Write-Verbose "Get-SourceItem: Original filename for [$($Source.BranchName)] [$($Source.ChangesetId)] $origSourceName was not found"
             throw("unable to find original file name")
         }
     }
@@ -735,6 +736,7 @@ foreach ($cs in $sortedHistory) {
                             $origSourceName = $sourceRelativePath
                             $sourceRelativePath  = $commitFileTracker["$sourceBranchName-$sourceChangesetId"] | where { $_ -eq $sourceRelativePath }
                             if ($sourceRelativePath -eq $null) {
+                                Write-Verbose "[$branchName-$changesetId] - currently tracked files:"
                                 $commitFileTracker["$sourceBranchName-$sourceChangesetId"] | % { write-verbose $_ }
                                 Write-Verbose "Get-SourceItem: Original filename for  [$sourceBranchName] [$sourceChangesetId] $origSourceName  was not found"
                                 throw("unable to find original file name")
@@ -936,6 +938,8 @@ foreach ($cs in $sortedHistory) {
                     $realPath = Get-CaseSensitivePath -FullPath (Join-path -path (pwd) -childpath $relativePath)
                     $realRelativePath = $realPath.SubString((pwd).Path.Length+1)
                     $commitFileTracker["$branchName-$changesetId"] += $realRelativePath
+                    Write-Verbose "[$branchName-$changesetId] - currently tracked files:"
+                    $commitFileTracker["$branchName-$changesetId"] | % { write-verbose $_ }
                 }
             }
 
