@@ -204,10 +204,9 @@ function Add-GitBranch {
 
 
     $branchName = $fromContainer.Replace($projectPath,"").replace("/","-").Replace("$", "").Replace(".","-").Replace(" ","-").Trim('-')
-    if (Test-Path $branchName) {
-        $found = Get-GitBranch($fromContainer)
-        Write-Verbose "Add-GitBranch: Branch $($found.Name) already exists"
-        return $found
+    if ($sourceName -eq  $branchName) {
+        Write-Verbose "Add-GitBranch: Branch $branchName already exists"
+        return $source
     }
     
     Write-Verbose "Add-GitBranch: Creating branch '$branchName' from '$sourceName'"
