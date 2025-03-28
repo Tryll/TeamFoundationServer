@@ -992,12 +992,12 @@ foreach ($cs in $sortedHistory) {
                                 # Based on current understanding, after review, this is a TFS inconsistency, and the file is not present after after tfs dump either. Ignoring
                                 Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Downloaded 0 bytes from TFS, ignoring/corrupt TFS" 
                                 $qcStatus = "Failed & Ignored"
-                            }
-
-                            if (-not (Compare-Files -file1 $relativePath -file2 $tmpFileName)) {
-                                Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File hash mismatch ($originalFileLength vs $downloadedFileLength), ignoring"
-                                Write-Host $tmpFileName
-                                throw "stop here"
+                            } else {
+                                if (-not (Compare-Files -file1 $relativePath -file2 $tmpFileName)) {
+                                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File hash mismatch ($originalFileLength vs $downloadedFileLength), ignoring"
+                                    Write-Host $tmpFileName
+                                    throw "stop here"
+                                }
                             }
 
                             # Cleanup
