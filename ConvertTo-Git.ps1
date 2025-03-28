@@ -171,20 +171,26 @@ param(
 
 # find branch by path, longest to shortest
 function Get-GitBranch  {
-    param ($path)
-    if ($path -eq $null) {
+    param ($tfsPath)
+    if ($tfsPath -eq $null) {
         throw ("Get-GitBranch : Path cannot be null")
     }
 
-    $currentPath = $path.Trim('/')
-    while ($currentPath -ne "") {
+    $currentPath = $tfsPath.Trim('/')
+    while ($currentPath -ne "" ) {
         if ($branches.ContainsKey($currentPath)) {
             return $branches[$currentPath]
+        }
+        # No more to check, default to main
+        if ($currentPath.LastIndexOf('/') -lt 0) {
+            break
         }
         $currentPath = $currentPath.Substring(0, $currentPath.LastIndexOf('/'))
     }
 
-    throw "Get-GitBranch Unknown branch for $path"
+    # If not found default to main
+    return $branches[$projectPath]
+
 }
 
 # create a new branch directly from container, input should never be a file.
@@ -192,12 +198,16 @@ function Add-GitBranch {
     param ($fromContainer)
     $fromContainer = $fromContainer.Trim('/')
 
+    # Find source
     $source = Get-GitBranch($fromContainer)
     $sourceName = $source.Name
+
+
     $branchName = $fromContainer.Replace($projectPath,"").replace("/","-").Replace("$", "").Replace(".","-").Replace(" ","-").Trim('-')
     if (Test-Path $branchName) {
-        Write-Verbose "Add-GitBranch: Branch $branchName already exists"
-        return Get-GitBranch($newContainer)
+        $found = Get-GitBranch($fromContainer)
+        Write-Verbose "Add-GitBranch: Branch $($found.Name) already exists"
+        return $found
     }
     
     Write-Verbose "Add-GitBranch: Creating branch '$branchName' from '$sourceName'"
