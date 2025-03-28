@@ -817,14 +817,17 @@ foreach ($cs in $sortedHistory) {
 
                         $out=git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
-                            # file was not found, attempt undelete, it will have to pass QC
-                            Write-Verbose "Checking out $sourceRelativePath from $sourcehash ^1"
 
-                            $out=git checkout -f $sourcehash^1 -- "$sourceRelativePath" 2>&1
-                            if ($out -is [System.Management.Automation.ErrorRecord]) {
-                                throw $out
-                            }
-                            Write-Verbose "$sourceRelativePath was undeleted from parent to $sourcehash : $out"
+                            Write-Verbose "$sourceRelativePath was not found, expecting it is deleted."
+                            $fileDeleted = $true
+                            # file was not found, attempt undelete, it will have to pass QC
+                            #Write-Verbose "Checking out $sourceRelativePath from $sourcehash ^1"
+
+                            #$out=git checkout -f $sourcehash^1 -- "$sourceRelativePath" 2>&1
+                            #if ($out -is [System.Management.Automation.ErrorRecord]) {
+                                #throw $out
+                            #}
+                            #Write-Verbose "$sourceRelativePath was undeleted from parent to $sourcehash : $out"
                         }
                         $ErrorActionPreference = $originalPreference
                     }
@@ -911,6 +914,7 @@ foreach ($cs in $sortedHistory) {
 
                     
                     $fileDownloaded = $true
+                    $fileDeleted = $false
                     
 
                 } catch {
