@@ -329,9 +329,9 @@ function Get-SourceItem {
         $origSourceName = "file: "+$Source.RelativePath
         $Source.RelativePath  = $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"] | where { $_ -eq $Source.RelativePath }
         if ($Source.RelativePath -eq $null) {
-            Write-Verbose "[$($Source.BranchName)-$($Source.ChangesetId)] - currently tracked files:"
+            Write-Verbose "[$($Source.BranchName)-$($Source.ChangesetId)] - tracked files:"
             $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"] | % { write-verbose $_ }
-            Write-Verbose "Get-SourceItem: Original filename for [$($Source.BranchName)] [$($Source.ChangesetId)] $origSourceName was not found"
+            Write-Error "Get-SourceItem: Original filename for [$($Source.BranchName)] [$($Source.ChangesetId)] $origSourceName was not found"
             throw("unable to find original file name")
         }
     }
@@ -736,9 +736,9 @@ foreach ($cs in $sortedHistory) {
                             $origSourceName = $sourceRelativePath
                             $sourceRelativePath  = $commitFileTracker["$sourceBranchName-$sourceChangesetId"] | where { $_ -eq $sourceRelativePath }
                             if ($sourceRelativePath -eq $null) {
-                                Write-Verbose "[$branchName-$changesetId] - currently tracked files:"
+                                Write-Verbose "[$sourceBranchName-$sourceChangesetId] - currently tracked files:"
                                 $commitFileTracker["$sourceBranchName-$sourceChangesetId"] | % { write-verbose $_ }
-                                Write-Verbose "Get-SourceItem: Original filename for  [$sourceBranchName] [$sourceChangesetId] $origSourceName  was not found"
+                                Write-Error "Original filename for  [$sourceBranchName] [$sourceChangesetId] $origSourceName  was not found"
                                 throw("unable to find original file name")
                             }
 
@@ -901,6 +901,20 @@ foreach ($cs in $sortedHistory) {
                 }
             }
 
+
+             # Track changed files, before potentially beeing deleted
+            if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
+                if (Test-Path -path $relativePath) {
+                    # If the file exists, get its real case-sensitive path and track that for this commit (will be used as sourceRelativePath)
+                    $realPath = Get-CaseSensitivePath -FullPath (Join-path -path (pwd) -childpath $relativePath)
+                    $realRelativePath = $realPath.SubString((pwd).Path.Length+1)
+                    $commitFileTracker["$branchName-$changesetId"] += $realRelativePath
+                    Write-Verbose "[$branchName-$changesetId] - currently tracked files:"
+                    $commitFileTracker["$branchName-$changesetId"] | % { write-verbose $_ }
+                }
+            }
+
+
             # Remove file, as last step, but not on undelete/SourceRename
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and
                  -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
@@ -930,18 +944,7 @@ foreach ($cs in $sortedHistory) {
 
         } finally {
 
-            # Track changed files
-    
-            if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
-                # If the file exists, get its real case-sensitive path and track that for this commit (will be used as sourceRelativePath)
-                if (Test-Path -path $relativePath) {
-                    $realPath = Get-CaseSensitivePath -FullPath (Join-path -path (pwd) -childpath $relativePath)
-                    $realRelativePath = $realPath.SubString((pwd).Path.Length+1)
-                    $commitFileTracker["$branchName-$changesetId"] += $realRelativePath
-                    Write-Verbose "[$branchName-$changesetId] - currently tracked files:"
-                    $commitFileTracker["$branchName-$changesetId"] | % { write-verbose $_ }
-                }
-            }
+   
 
 
 
