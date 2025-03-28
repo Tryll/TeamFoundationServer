@@ -529,7 +529,7 @@ git init -b $projectBranch
 git config core.autocrlf false
 git config core.longpaths true
 # Old TFS checkins are case-insensitive, so we need to ignore case.
-git config core.ignoreCase true
+git config core.ignorecase true
 # Disable special unicode file name treatments
 git config core.quotepath false
 
@@ -628,7 +628,7 @@ foreach ($cs in $sortedHistory) {
         $processedItems++
         $forceAddNoSource = $false
         $fileDeleted = $false
-        $fileDownloaded = $true
+        $fileDownloaded = $false
 
         # Abort on mysterious change
         if ($change.MergeSources.Count -gt 1) {
@@ -968,9 +968,6 @@ foreach ($cs in $sortedHistory) {
         } finally {
 
    
-
-
-
             # QUALITY CONTROL: 
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder)) {
 
