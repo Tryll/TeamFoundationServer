@@ -819,7 +819,7 @@ foreach ($cs in $sortedHistory) {
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
 
                             # Should check the git status of the file.     
-                            Write-Verbose "$sourceRelativePath was not found, expecting it is deleted."
+                            Write-Verbose "$sourceRelativePath was not found, expecting it was deleted."
                             $fileDeleted = $true
                             # avoiding move processing
                             $sourceRelativePath = $relativePath
