@@ -909,8 +909,6 @@ foreach ($cs in $sortedHistory) {
                     $realPath = Get-CaseSensitivePath -FullPath (Join-path -path (pwd) -childpath $relativePath)
                     $realRelativePath = $realPath.SubString((pwd).Path.Length+1)
                     $commitFileTracker["$branchName-$changesetId"] += $realRelativePath
-                    Write-Verbose "[$branchName-$changesetId] - currently tracked files:"
-                    $commitFileTracker["$branchName-$changesetId"] | % { write-verbose $_ }
                 }
             }
 
