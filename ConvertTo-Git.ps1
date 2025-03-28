@@ -189,7 +189,7 @@ function Get-GitBranch  {
     }
 
     # When we have processed all down to $/ the only implication is that we are looking for something not in the same project.
-    Write-Error "Get-GitBranch: $tfsPath is from another project on TFS."
+    Write-Verbose "Get-GitBranch: $tfsPath is from another project on TFS."
     throw ("Get-GitBranch: $tfsPath is from another project on TFS.")
 }
 
@@ -347,7 +347,7 @@ function Get-SourceItem {
         if ($Source.RelativePath -eq $null) {
             Write-Verbose "[$($Source.BranchName)-$($Source.ChangesetId)] - tracked files:"
             $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"] | % { write-verbose $_ }
-            Write-Error "Get-SourceItem: Original filename for [$($Source.BranchName)] [$($Source.ChangesetId)] $origSourceName was not found"
+            Write-Verbose "Get-SourceItem: Original filename for [$($Source.BranchName)] [$($Source.ChangesetId)] $origSourceName was not found"
             throw("unable to find original file name")
         }
     }
@@ -763,7 +763,7 @@ foreach ($cs in $sortedHistory) {
                             if ($sourceRelativePath -eq $null) {
                                 Write-Verbose "[$sourceBranchName-$sourceChangesetId] - currently tracked files:"
                                 $commitFileTracker["$sourceBranchName-$sourceChangesetId"] | % { write-verbose $_ }
-                                Write-Error "Original filename for  [$sourceBranchName] [$sourceChangesetId] $origSourceName  was not found"
+                                Write-Verbose "Original filename for  [$sourceBranchName] [$sourceChangesetId] $origSourceName  was not found"
                                 throw("unable to find original file name")
                             }
 
@@ -843,7 +843,7 @@ foreach ($cs in $sortedHistory) {
                         # Move source to target
                         $out = git mv -f "$sourceRelativePath" "$relativePath" 2>&1
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
-                            Write-Error "Git mv $relativePath failed"
+                            Write-Verbose "Git mv $relativePath failed"
                             throw $out
                         }
 
@@ -852,7 +852,7 @@ foreach ($cs in $sortedHistory) {
                             # Revert the original sourcerelativePath
                             $out=git checkout -f $backupHead -- "$sourceRelativePath" 2>&1
                             if ($out -is [System.Management.Automation.ErrorRecord]) {
-                                Write-Error "git checkout failed $backupHead $sourceRelativePath"
+                                Write-Verbose "git checkout failed $backupHead $sourceRelativePath"
                                 throw $out
                             }
                         }
@@ -905,7 +905,7 @@ foreach ($cs in $sortedHistory) {
                     $changeItem.DownloadFile($target.FullName)
 
                     if (-not (Test-Path -path $target.FullName)) {
-                        Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Download failed, file not found"
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Download failed, file not found"
                         throw "stop here"
                     }
 
@@ -921,7 +921,7 @@ foreach ($cs in $sortedHistory) {
                 
                 $out=git add "$relativePath" 2>&1
                 if ($out -is [System.Management.Automation.ErrorRecord]) {
-                    Write-Error "Git add $relativePath failed, for $($target.FullName)"
+                    Write-Verbose "Git add $relativePath failed, for $($target.FullName)"
                     throw $out
                 }
             }
@@ -990,12 +990,12 @@ foreach ($cs in $sortedHistory) {
                                 
                             if ($originalFileLength -gt 0 -and $downloadedFileLength -eq 0) {
                                 # Based on current understanding, after review, this is a TFS inconsistency, and the file is not present after after tfs dump either. Ignoring
-                                Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Downloaded 0 bytes from TFS, ignoring/corrupt TFS" 
+                                Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Downloaded 0 bytes from TFS, ignoring/corrupt TFS" 
                                 $qcStatus = "Failed & Ignored"
                             }
 
                             if (-not (Compare-Files -file1 $relativePath -file2 $tmpFileName)) {
-                                Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File hash mismatch ($originalFileLength vs $downloadedFileLength), ignoring"
+                                Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File hash mismatch ($originalFileLength vs $downloadedFileLength), ignoring"
                                 Write-Host $tmpFileName
                                 throw "stop here"
                             }
@@ -1003,7 +1003,7 @@ foreach ($cs in $sortedHistory) {
                             # Cleanup
                             remove-item -path $tmpFileName -force -erroraction SilentlyContinue
                         } else {
-                            Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Unable to download file from TFS, ignoring" 
+                            Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - Unable to download file from TFS, ignoring" 
                             $qcStatus = "Failed & Ignored"
                         }
 
@@ -1015,7 +1015,7 @@ foreach ($cs in $sortedHistory) {
 
                     # Check if deleted file is still present
                     if (Test-Path -path $relativePath) {
-                        Write-Error "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File still exists"
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - QC - File still exists"
                         throw "stop here"
                     }
                 }
