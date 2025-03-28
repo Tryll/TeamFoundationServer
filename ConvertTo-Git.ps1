@@ -326,10 +326,11 @@ function Get-SourceItem {
     # This may fail if a changeset has an add and an move in it of the same file, but it is a rare case.
     if ($Source.Hash -ne $null) {
         # Case insensitive search to find the correct file name for source file:
+        $origSourceName = $Source.RelativePath
         $Source.RelativePath  = $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"] | where { $_ -eq $Source.RelativePath }
         if ($Source.RelativePath -eq $null) {
-            $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"]
-            Write-Verbose "Get-SourceItem: Original filename for [$($Source.BranchName)] [$($Source.ChangesetId)] $($Source.RelativePath) was not found"
+            $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"] | % { write-verbose $_ }
+            Write-Verbose "Get-SourceItem: Original filename for [$($Source.BranchName)] [$($Source.ChangesetId)] $origSourceName  was not found"
             throw("unable to find original file name")
         }
     }
@@ -731,12 +732,15 @@ foreach ($cs in $sortedHistory) {
 
 
                             # Case insensitive search to find the correct file name for source file:
+                            $origSourceName = $sourceRelativePath
                             $sourceRelativePath  = $commitFileTracker["$sourceBranchName-$sourceChangesetId"] | where { $_ -eq $sourceRelativePath }
                             if ($sourceRelativePath -eq $null) {
-                                $commitFileTracker["$sourceBranchName-$sourceChangesetId"]
-                                Write-Verbose "Original filename for [$sourceBranchName] [$sourceChangesetId] $sourceRelativePath was not found"
+                                $commitFileTracker["$sourceBranchName-$sourceChangesetId"] | % { write-verbose $_ }
+                                Write-Verbose "Get-SourceItem: Original filename for  [$sourceBranchName] [$sourceChangesetId] $origSourceName  was not found"
                                 throw("unable to find original file name")
                             }
+
+
                             pop-location #sourceBranchName
                  
                             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] Commit updated!" -ForegroundColor Gray
