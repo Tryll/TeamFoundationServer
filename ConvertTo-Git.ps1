@@ -821,7 +821,9 @@ foreach ($cs in $sortedHistory) {
                             # Should check the git status of the file.     
                             Write-Verbose "$sourceRelativePath was not found, expecting it is deleted."
                             $fileDeleted = $true
-                            
+                            # avoiding move processing
+                            $sourceRelativePath = $relativePath
+
                             # file was not found, attempt undelete, it will have to pass QC
                             #Write-Verbose "Checking out $sourceRelativePath from $sourcehash ^1"
 
