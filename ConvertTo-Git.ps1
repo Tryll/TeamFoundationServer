@@ -188,9 +188,9 @@ function Get-GitBranch  {
         $currentPath = $currentPath.Substring(0, $currentPath.LastIndexOf('/'))
     }
 
-    # If not found default to main
-    return $branches[$projectPath]
-
+    # When we have processed all down to $/ the only implication is that we are looking for something not in the same project.
+    Write-Error "Get-GitBranch: $tfsPath is from another project on TFS."
+    throw ("Get-GitBranch: $tfsPath is from another project on TFS.")
 }
 
 # create a new branch directly from container, input should never be a file.
