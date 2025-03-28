@@ -818,8 +818,10 @@ foreach ($cs in $sortedHistory) {
                         $out=git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
 
+                            # Should check the git status of the file.     
                             Write-Verbose "$sourceRelativePath was not found, expecting it is deleted."
                             $fileDeleted = $true
+                            
                             # file was not found, attempt undelete, it will have to pass QC
                             #Write-Verbose "Checking out $sourceRelativePath from $sourcehash ^1"
 
