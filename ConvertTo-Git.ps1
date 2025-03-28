@@ -307,6 +307,13 @@ function Get-SourceItem {
     }
 
     $Source.BranchPath = Get-ItemBranch $Source.Path $changesetId
+
+    if (-not $Source.BranchPath.StartsWith($projectPath)) {
+        # We will support this from main thread, by always downloading - history will not be there though.
+        Write-Verbose "Get-SourceItem: $($Source.BranchPath) is not from project $projectPath"
+        throw("Get-SourceItem: Should not be here")
+    }
+
     $Source.Branch = Get-GitBranch $Source.BranchPath
     $Source.BranchName = $Source.Branch.Name
     $Source.ChangesetId = $change.MergeSources[0].VersionTo
@@ -689,8 +696,16 @@ foreach ($cs in $sortedHistory) {
                  $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Undelete -or
                  $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rollback  )) {
                 
+
+                # Out of project route
+                if ($change.MergeSources.Count -gt 0 -and -not $change.MergeSources[0].ServerItem.StartsWith($projectPath)) {
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Is not from our project $projectPath!" -ForegroundColor Gray
+                    $forceAddNoSource = $true
+                }
+
+
                 # The change item is a branch/merge with a source reference
-                if ($change.MergeSources.Count -gt 0) {
+                if (-not $forceAddNoSource -and $change.MergeSources.Count -gt 0) {
                 
                     # Lets ignore folders in merge/branch, as files are processed subsequently and git handles folders better/to good
                     if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
@@ -699,6 +714,7 @@ foreach ($cs in $sortedHistory) {
                         # Next item!
                         continue
                     }
+
 
                     # Get source item
                     $source = Get-SourceItem $change $changesetId
