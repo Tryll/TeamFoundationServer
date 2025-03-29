@@ -615,9 +615,6 @@ foreach ($cs in $sortedHistory) {
     $changeCounter=0
     $changesetId=0
     $relativePath =""
-    
-    # TFS does not deliver the items in processing order, trying descending itemid order:
-    $changes = $changes | Sort-Object -Property { $_.Item.ItemId } -descending
 
     foreach ($change in $changes) {
 
