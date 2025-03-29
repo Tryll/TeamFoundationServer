@@ -715,6 +715,15 @@ foreach ($cs in $sortedHistory) {
                         continue
                     }
 
+                    # "Merge" operations on TFS without Edit or Branch is really nothing, and can be ignored - from the perspective of GIT.
+                    if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging without Edit/Branch is a no-op in GIT" -ForegroundColor Gray
+
+                        # Next item!
+                        continue
+                    }
+
+
 
                     # Get source item
                     $source = Get-SourceItem $change $changesetId
@@ -818,20 +827,35 @@ foreach ($cs in $sortedHistory) {
                         $out=git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
 
-                            # Should check the git status of the file.     
-                            Write-Verbose "$sourceRelativePath was not found, expecting it was deleted."
-                            $fileDeleted = $true
-                            # avoiding move processing
-                            $sourceRelativePath = $relativePath
+                            if ($changeItem.DeletionId -gt 0) {
 
-                            # file was not found, attempt undelete, it will have to pass QC
-                            #Write-Verbose "Checking out $sourceRelativePath from $sourcehash ^1"
+                                # Decision: Will not forward merge deleted items, by findit it and removing it.
+                                # This could lead to a problem later when a file is request "undeleted", we'll have to look it up at that time.
+                                # This approach keeps GIT history correct.
+                                Write-Verbose "$sourceRelativePath is intended to be deleted"
+                                $fileDeleted = $true
+                                # Avoiding move processing
+                                $sourceRelativePath = $relativePath
 
-                            #$out=git checkout -f $sourcehash^1 -- "$sourceRelativePath" 2>&1
-                            #if ($out -is [System.Management.Automation.ErrorRecord]) {
-                                #throw $out
-                            #}
-                            #Write-Verbose "$sourceRelativePath was undeleted from parent to $sourcehash : $out"
+                                # Alternatively find the file:
+                                # file was not found, attempt undelete, it will have to pass QC
+                                #Write-Verbose "Checking out $sourceRelativePath from $sourcehash ^1"
+
+                                #$out=git checkout -f $sourcehash^1 -- "$sourceRelativePath" 2>&1
+                                #if ($out -is [System.Management.Automation.ErrorRecord]) {
+                                    #throw $out
+                                #}
+                                #Write-Verbose "$sourceRelativePath was undeleted from parent to $sourcehash : $out"
+                                
+                            } else {
+                                Write-verbose ($changeItem | convertto-json)
+                                Write-Verbose "Something whent wrong with git checkout [$sourcehash] $sourceRelativePath"
+
+                                throw ($out)
+
+                            }
+                            
+                      
                         }
                         $ErrorActionPreference = $originalPreference
                     }

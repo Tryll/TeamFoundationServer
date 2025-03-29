@@ -127,20 +127,28 @@ try {
 $changes = $vcs.GetChangesForChangeset($ChangesetId, $false,  [int]::MaxValue, $null, $null, $true)
 
 
-$changes | Where-Object { $_.Item.ServerItem.ToLower().EndsWith($FileName.Replace("\","/").ToLower())} | % {
+$changes | Where-Object { 
+    Write-Verbose "Changeset Item: $($_.Item.ServerItem)"
+    $_.Item.ServerItem.ToLower().EndsWith($FileName.Replace("\","/").ToLower())
+} | % {
     $change = $_
     $changeItem = $change.Item
     Write-Host "Downloading file: $($changeItem.ServerItem)..." -ForegroundColor Cyan
     Write-Host "Target: $FileName" -ForegroundColor Cyan
     # Create the folder structure if it doesn't exist
     new-item -path $FileName -ItemType File -Force | Out-Null
-    ri $FileName -Force -ErrorAction SilentlyContinue
-    $changeItem.DownloadFile($FileName)
-    if (-not (Test-Path -path $FileName)) {
-        $changeItem
-        Write-Host "Error: File not downloaded" -ForegroundColor Red
+
+    $targetFile  ="$env:TEMP\Output.txt"
+    ri -path  $targetFile  -Force -ErrorAction SilentlyContinue
+    $changeItem.DownloadFile($targetFile)
+    if (-not (Test-Path -path $targetFile)) {
+        $changeItem | convertto-json
+        Write-Host "Error downloading file." -ForegroundColor Red
+        exit 1
     } else {
-        Write-Host "File downloaded successfully" -ForegroundColor Green
+        Write-Host "File  $FileName downloaded successfully to $targetFile" -ForegroundColor Green
+        exit 0
     }
 }
     
+Write-Host "No changes found for $FileName in changeset $ChangesetId." -ForegroundColor Yellow
