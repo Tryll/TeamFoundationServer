@@ -628,7 +628,7 @@ foreach ($cs in $sortedHistory) {
         $processedItems++
         $forceAddNoSource = $false
         $fileDeleted = $false
-        $fileDownloaded = $false
+        $qualityCheckNotApplicable = $false
 
         # Abort on mysterious change
         if ($change.MergeSources.Count -gt 1) {
@@ -710,7 +710,7 @@ foreach ($cs in $sortedHistory) {
                     # Lets ignore folders in merge/branch, as files are processed subsequently and git handles folders better/to good
                     if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
                         Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging/Rename/Branch - ignoring container operations" -ForegroundColor Gray
-
+                        $qualityCheckNotApplicable = $true
                         # Next item!
                         continue
                     }
@@ -718,7 +718,8 @@ foreach ($cs in $sortedHistory) {
                     # "Merge" operations on TFS without Edit or Branch is really nothing, and can be ignored - from the perspective of GIT.
                     if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
                         Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging without Edit/Branch is a no-op in GIT" -ForegroundColor Gray
-
+                        # There is nothing to check
+                        $qualityCheckNotApplicable = $true
                         # Next item!
                         continue
                     }
@@ -941,7 +942,7 @@ foreach ($cs in $sortedHistory) {
                     }
 
                     
-                    $fileDownloaded = $true
+                    $qualityCheckNotApplicable = $true
                     $fileDeleted = $false
                     
 
@@ -1008,7 +1009,7 @@ foreach ($cs in $sortedHistory) {
                 # Check resulting file 
                 $qcStatus ="Pass"
                 if (-not $fileDeleted) {
-                    if (-not $fileDownloaded) {
+                    if (-not $qualityCheckNotApplicable) {
                         $tmpFileName = "$env:TEMP\QCFile.tmp"
 
                         # Ensure previous file is not present
