@@ -629,6 +629,7 @@ foreach ($cs in $sortedHistory) {
         $forceAddNoSource = $false
         $fileDeleted = $false
         $qualityCheckNotApplicable = $false
+        $realFileName = $null
 
         # Abort on mysterious change
         if ($change.MergeSources.Count -gt 1) {
@@ -720,6 +721,7 @@ foreach ($cs in $sortedHistory) {
                         Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging without Edit/Branch is a no-op in GIT" -ForegroundColor Gray
                         # There is nothing to check
                         $qualityCheckNotApplicable = $true
+
                         # Next item!
                         continue
                     }
@@ -962,12 +964,15 @@ foreach ($cs in $sortedHistory) {
 
 
 
-
-
+      
             # Remove file, as last step, but not on undelete/SourceRename
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and
                  -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting" -ForegroundColor Gray
+
+                # Track it before deletion
+                $realPath = Get-CaseSensitivePath -FullPath (Join-path -path (pwd) -childpath $relativePath)
+                $realFileName = $realPath.SubString((pwd).Path.Length+1)
 
                 # Make the delete
                 $originalPreference = $ErrorActionPreference
@@ -994,12 +999,17 @@ foreach ($cs in $sortedHistory) {
         } finally {
 
 
-             # Track changed files, adds / deletes / merges and so on.
-            if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {       
-                # If the file exists, get its real case-sensitive path and track that for this commit (will be used as sourceRelativePath)
-                $realPath = Get-CaseSensitivePath -FullPath (Join-path -path (pwd) -childpath $relativePath)
-                $realRelativePath = $realPath.SubString((pwd).Path.Length+1)
-                $commitFileTracker["$branchName-$changesetId"] += $realRelativePath
+            # Track change items / files and their real file system name (case specific):
+            if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
+                
+                if ($realFileName -eq $null) {
+                    # Only delete will have this prefilled
+                    $realPath = Get-CaseSensitivePath -FullPath (Join-path -path (pwd) -childpath $relativePath)
+                    $realFileName = $realPath.SubString((pwd).Path.Length+1)
+                }
+                  
+                $commitFileTracker["$branchName-$changesetId"] += $realFileName
+                
             }
    
             # QUALITY CONTROL: 
