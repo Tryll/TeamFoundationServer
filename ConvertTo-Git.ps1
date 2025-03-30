@@ -397,7 +397,6 @@ function Sort-TfsChangeItems {
         
     }
 
-    
     return $sorted
 }
 
