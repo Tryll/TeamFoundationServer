@@ -961,15 +961,7 @@ foreach ($cs in $sortedHistory) {
             }
 
 
-             # Track changed files, before potentially beeing deleted
-            if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
-                if (Test-Path -path $relativePath) {
-                    # If the file exists, get its real case-sensitive path and track that for this commit (will be used as sourceRelativePath)
-                    $realPath = Get-CaseSensitivePath -FullPath (Join-path -path (pwd) -childpath $relativePath)
-                    $realRelativePath = $realPath.SubString((pwd).Path.Length+1)
-                    $commitFileTracker["$branchName-$changesetId"] += $realRelativePath
-                }
-            }
+
 
 
             # Remove file, as last step, but not on undelete/SourceRename
@@ -1001,6 +993,14 @@ foreach ($cs in $sortedHistory) {
 
         } finally {
 
+
+             # Track changed files, adds / deletes / merges and so on.
+            if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {       
+                # If the file exists, get its real case-sensitive path and track that for this commit (will be used as sourceRelativePath)
+                $realPath = Get-CaseSensitivePath -FullPath (Join-path -path (pwd) -childpath $relativePath)
+                $realRelativePath = $realPath.SubString((pwd).Path.Length+1)
+                $commitFileTracker["$branchName-$changesetId"] += $realRelativePath
+            }
    
             # QUALITY CONTROL: 
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder)) {
