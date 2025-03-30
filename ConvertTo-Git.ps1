@@ -858,6 +858,8 @@ foreach ($cs in $sortedHistory) {
                         $ErrorActionPreference = 'Continue'
 
                         $out=git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
+                        $ErrorActionPreference = $originalPreference
+
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
 
                             if ($changeItem.DeletionId -gt 0) {
@@ -891,7 +893,7 @@ foreach ($cs in $sortedHistory) {
                             
                       
                         }
-                        $ErrorActionPreference = $originalPreference
+                       
                     }
                     
 
@@ -1033,7 +1035,7 @@ foreach ($cs in $sortedHistory) {
             # QUALITY CONTROL: 
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder)) {
 
-                Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - QC Processing"
+                Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] [$fileDeleted] [$qualityCheckNotApplicable] $relativePath - QC Processing"
 
                 # Check resulting file 
                 $qcStatus ="Pass"
