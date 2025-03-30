@@ -339,19 +339,7 @@ function Get-SourceItem {
 
     Write-Verbose "Get-SourceItem: [$($Source.BranchName)] [$($Source.ChangesetId)-$($Source.ChangesetIdFrom)] [$($Source.Hash)] $($Source.RelativePath)"
 
-    # This may fail if a changeset has an add and an move in it of the same file, but it is a rare case.
-    if ($Source.Hash -ne $null) {
-        # Case insensitive search to find the correct file name for source file:
-        $origSourceName = "file: "+$Source.RelativePath
-        $Source.RelativePath  = $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"] | where { $_ -eq $Source.RelativePath }
-        if ($Source.RelativePath -eq $null) {
-            Write-Verbose "[$($Source.BranchName)-$($Source.ChangesetId)] - tracked files:"
-            $commitFileTracker["$($Source.BranchName)-$($Source.ChangesetId)"] | % { write-verbose $_ }
-            Write-Verbose "Get-SourceItem: Original filename for [$($Source.BranchName)] [$($Source.ChangesetId)] $origSourceName was not found"
-            throw("unable to find original file name")
-        }
-    }
-
+ 
     return $Source
 }
 
@@ -585,10 +573,6 @@ $processedItems = 0
 
 $branchHashTracker = @{}
 
-# "$Branch-$CommitId"=>@( list of files involed )
-# This will help to avoid quering git for each file in a commit, it will be faster but consume memory.
-$commitFileTracker =@{}
-
 # Process each changeset
 foreach ($cs in $sortedHistory) {
     $processedChangesets++
@@ -677,12 +661,6 @@ foreach ($cs in $sortedHistory) {
         push-location $branchName
         $branchChanges[$branchName] = $true
 
-        # Track files in commit for file name identification, as TFS is not case sensitive
-        # Tracks files in finally, after creation
-        if (-not $commitFileTracker.ContainsKey("$branchName-$changesetId")) {
-            # Initialize branch commit
-            $commitFileTracker["$branchName-$changesetId"]= @()
-        }
     
 
         try { #  try/finally for pop-location and  quality control
@@ -767,18 +745,6 @@ foreach ($cs in $sortedHistory) {
 
                             $branchHashTracker["$sourceBranchName-$changesetId"] = $sourcehash
                             Write-Host "[TFS-$changesetId] [$sourceBranchName] [$sourcehash] Comitted" -ForegroundColor Gray
-
-
-                            # Case insensitive search to find the correct file name for source file:
-                            $origSourceName = $sourceRelativePath
-                            $sourceRelativePath  = $commitFileTracker["$sourceBranchName-$sourceChangesetId"] | where { $_ -eq $sourceRelativePath }
-                            if ($sourceRelativePath -eq $null) {
-                                Write-Verbose "[$sourceBranchName-$sourceChangesetId] - currently tracked files:"
-                                $commitFileTracker["$sourceBranchName-$sourceChangesetId"] | % { write-verbose $_ }
-                                Write-Verbose "Original filename for  [$sourceBranchName] [$sourceChangesetId] $origSourceName  was not found"
-                                throw("unable to find original file name")
-                            }
-
 
                             pop-location #sourceBranchName
                  
@@ -999,18 +965,6 @@ foreach ($cs in $sortedHistory) {
         } finally {
 
 
-            # Track change items / files and their real file system name (case specific):
-            if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) {
-                
-                if ($realFileName -eq $null) {
-                    # Only delete will have this prefilled
-                    $realPath = Get-CaseSensitivePath -FullPath (Join-path -path (pwd) -childpath $relativePath)
-                    $realFileName = $realPath.SubString((pwd).Path.Length+1)
-                }
-                  
-                $commitFileTracker["$branchName-$changesetId"] += $realFileName
-                
-            }
    
             # QUALITY CONTROL: 
             if ($WithQualityControl -and $relativePath -ne "" -and ($itemType -ne [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder)) {
