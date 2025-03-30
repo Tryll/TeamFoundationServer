@@ -343,34 +343,6 @@ function Get-SourceItem {
     return $Source
 }
 
-function Get-CaseSensitivePath {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$FullPath
-    )
-    
-    $root = [System.IO.Path]::GetPathRoot($FullPath)
-    
-    try {
-        $relativePath = $FullPath.Substring($root.Length)
-        foreach ($name in $relativePath.Split([System.IO.Path]::DirectorySeparatorChar, [StringSplitOptions]::RemoveEmptyEntries)) {
-            $entries = [System.IO.Directory]::GetFileSystemEntries($root, $name)
-            if ($entries.Length -gt 0) {
-                $root = $entries[0]
-            } else {
-                throw "Path segment not found: $name"
-            }
-        }
-    }
-    catch {
-        # Fallback to original path
-        $root += $FullPath.Substring($root.Length)
-        Write-Verbose "Path not found: $Path"
-    }
-    
-    return $root
-}
-
 <#
 .SYNOPSIS
 Sorts TFS change items to ensure Rename operations appear before their corresponding Add operations.
@@ -678,7 +650,7 @@ foreach ($cs in $sortedHistory) {
         $forceAddNoSource = $false
         $fileDeleted = $false
         $qualityCheckNotApplicable = $false
-        $realFileName = $null
+
 
         # Abort on mysterious change
         if ($change.MergeSources.Count -gt 1) {
@@ -1008,9 +980,6 @@ foreach ($cs in $sortedHistory) {
                  -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting" -ForegroundColor Gray
 
-                # Track it before deletion
-                $realPath = Get-CaseSensitivePath -FullPath (Join-path -path (pwd) -childpath $relativePath)
-                $realFileName = $realPath.SubString((pwd).Path.Length+1)
 
                 # Make the delete
                 $originalPreference = $ErrorActionPreference
