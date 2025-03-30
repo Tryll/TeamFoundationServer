@@ -424,6 +424,7 @@ function Sort-TfsChangeItems {
         } 
         
     }
+    Write-Verbose "What ?"
     Write-Verbose ($sorted | convertto-json)
     
     return $sorted
@@ -661,10 +662,10 @@ foreach ($cs in $sortedHistory) {
     # Need to address "Add" vs "Rename" so that the order will be correct, Rename first the Add on the same file.
     # This will be handled as inplace replacement if discovered.
     Write-Verbose "Ensuring Rename < Add in changes"
-    $changes = Sort-TfsChangeItems -changes $changes
+    $ordered = Sort-TfsChangeItems -changes $changes
 
 
-    foreach ($change in $changes) {
+    foreach ($change in $ordered) {
 
         $changeCounter++
         $changeItem = $change.Item
