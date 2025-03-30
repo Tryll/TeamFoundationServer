@@ -396,6 +396,8 @@ function Sort-TfsChangeItems {
         } 
         
     }
+
+    
     Write-Verbose "What ?"
     Write-Verbose ($sorted | convertto-json)
     
