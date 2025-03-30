@@ -883,6 +883,9 @@ foreach ($cs in $sortedHistory) {
                                 #Write-Verbose "$sourceRelativePath was undeleted from parent to $sourcehash : $out"
                                 
                             } else {
+
+                                $status = git show --name-only $sourcehash 2>&1
+                                write-verbose $status
                                 Write-verbose $out
                                 Write-verbose ($changeItem | convertto-json)
                                 Write-Verbose "Something whent wrong with git checkout [$sourcehash] $sourceRelativePath"
