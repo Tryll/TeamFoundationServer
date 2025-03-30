@@ -389,28 +389,30 @@ function Sort-TfsChangeItems {
     $sorted = $changes.Clone()
     
     # Track Add files based on their path
-    $addFiles = @{}
+    $addItems = @{}
     $idx = 0
 
     foreach ($change in $sorted) {
-        $changeItem = $change.Item
-        $changeType = [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]($change.ChangeType)
-        $itemPath = $changeItem.ServerItem
-        
-        # Store the index of Add operations
-        if (($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add) -and 
-            ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::File)) {
-            $addFiles[$itemPath] = $idx
-        }
-        
-        # Check for Rename operations with corresponding Add
-        if (($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) -and 
-            $changeItem.MergeSources -and 
-            $changeItem.MergeSources.Count -gt 0 -and 
-            $addFiles.ContainsKey($changeItem.MergeSources[0].ServerItem)) {
+
+        # Track adds for files:
+        if (($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add) -and 
+            ($change.Item.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File)) {
             
+            Write-Verbose "Sort-TfsChangeItems tracking $($change.Item.ServerItem)"
+            $addItems[$change.Item.ServerItem] = $idx++
+            
+        }   
+
+        # Switch renames for files that match existing, so renames comes before adds
+        if (($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) -and 
+            ($change.Item.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) -and
+            $change.MergeSources.Count -gt 0 -and 
+            $addItems.ContainsKey($change.MergeSources[0].ServerItem)) {
+            
+            Write-Verbose "Sort-TfsChangeItems moving Rename before Add for $($change.MergeSources[0].ServerItem)"
+
             # Get the original Add change
-            $origAddIdx = $addFiles[$changeItem.MergeSources[0].ServerItem]
+            $origAddIdx = $addItems[$change.MergeSources[0].ServerItem]
             $origAddChange = $sorted[$origAddIdx]
             
             # Swap positions (put Rename before Add)
@@ -418,11 +420,11 @@ function Sort-TfsChangeItems {
             $sorted[$idx] = $origAddChange
             
             # Update the index in the tracking dictionary
-            $addFiles[$itemPath] = $idx
-        }
+            $addItems[$change.MergeSources[0].ServerItem] = $idx
+        } 
         
-        $idx++
     }
+    Write-Verbose ($sorted | convertto-json)
     
     return $sorted
 }
