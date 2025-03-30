@@ -371,6 +371,62 @@ function Get-CaseSensitivePath {
     return $root
 }
 
+<#
+.SYNOPSIS
+Sorts TFS change items to ensure Rename operations appear before their corresponding Add operations.
+
+.DESCRIPTION
+This function reorders an array of TFS change items by swapping positions of Rename and Add operations
+for the same file paths, ensuring that Rename operations are processed before Add operations.
+#>
+function Sort-TfsChangeItems {
+    param (
+        [Parameter(Mandatory=$true)]
+        [array]$changes
+    )
+    
+    # Clone the array to avoid modifying the original
+    $sorted = $changes.Clone()
+    
+    # Track Add files based on their path
+    $addFiles = @{}
+    $idx = 0
+
+    foreach ($change in $sorted) {
+        $changeItem = $change.Item
+        $changeType = [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]($change.ChangeType)
+        $itemPath = $changeItem.ServerItem
+        
+        # Store the index of Add operations
+        if (($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add) -and 
+            ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::File)) {
+            $addFiles[$itemPath] = $idx
+        }
+        
+        # Check for Rename operations with corresponding Add
+        if (($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) -and 
+            $changeItem.MergeSources -and 
+            $changeItem.MergeSources.Count -gt 0 -and 
+            $addFiles.ContainsKey($changeItem.MergeSources[0].ServerItem)) {
+            
+            # Get the original Add change
+            $origAddIdx = $addFiles[$changeItem.MergeSources[0].ServerItem]
+            $origAddChange = $sorted[$origAddIdx]
+            
+            # Swap positions (put Rename before Add)
+            $sorted[$origAddIdx] = $change
+            $sorted[$idx] = $origAddChange
+            
+            # Update the index in the tracking dictionary
+            $addFiles[$itemPath] = $idx
+        }
+        
+        $idx++
+    }
+    
+    return $sorted
+}
+
 #endregion
 
 
@@ -600,6 +656,10 @@ foreach ($cs in $sortedHistory) {
     $changesetId=0
     $relativePath =""
 
+    # Need to address "Add" vs "Rename" so that the order will be correct, Rename first the Add on the same file.
+    # This will be handled as inplace replacement if discovered.
+    $changes = Sort-TfsChangeItems -changes $changes
+
     foreach ($change in $changes) {
 
         $changeCounter++
@@ -664,6 +724,8 @@ foreach ($cs in $sortedHistory) {
     
 
         try { #  try/finally for pop-location and  quality control
+
+        
 
 
             # Retrieve files from a Source changeset, and prepare for other actions later
