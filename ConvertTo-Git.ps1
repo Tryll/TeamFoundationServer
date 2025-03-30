@@ -365,7 +365,6 @@ function Sort-TfsChangeItems {
     $idx = 0
 
     foreach ($change in $sorted) {
-        Write-Verbose "Sort-TfsChangeItems checking $($change.Item.ServerItem)"
 
         # Track adds for files:
         if (($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add) -and 
@@ -398,9 +397,6 @@ function Sort-TfsChangeItems {
         
     }
 
-    
-    Write-Verbose "What ?"
-    Write-Verbose ($sorted | convertto-json)
     
     return $sorted
 }
