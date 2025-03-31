@@ -895,10 +895,6 @@ foreach ($cs in $sortedHistory) {
                         $targetFile = new-item -path $relativePath -type file -force -erroraction SilentlyContinue 
                         remove-item -path $relativePath -force -erroraction SilentlyContinue | Out-Null
 
-                        # Move source to target
-                        $originalPreference = $ErrorActionPreference
-                        $ErrorActionPreference = 'Continue'
-
                         # This just fails from time to time, unable to find the source file even though case and git show confirms it
                 
                         $tmpFileName =""
@@ -911,11 +907,9 @@ foreach ($cs in $sortedHistory) {
                         } while (Test-Path -path $tmpFileName)
                         
                         # Git mv cannot handle long filenames properly, going via temp file and backPath fetching (workaround) 
-                        $out = git mv -f "$sourceRelativePath" "$tmpFileName" 2>&1
-                        if (-not (Test-Path -path $tmpFileName)) {
-                            Write-Verbose "$tmpFileName did not get created!"   
-                        } else {
-                            Write-Verbose "$tmpFileName did get created!"   
+                        git mv -f "$sourceRelativePath" "$tmpFileName" 2>&1 | out-host
+                        
+                        if (Test-Path -path $tmpFileName) {
 
                             # Get the relative path to the target directory
                             $targetDir = $targetFile.DirectoryName
@@ -928,30 +922,13 @@ foreach ($cs in $sortedHistory) {
                             $backPath = "..\" * $relativeTargetDir.Split("\").Count
                             
                             # Second move: temp file to target
-                            Write-Verbose "Moving $backPath\$tmpFileName to $($targetFile.Name)"
-                            $out = git mv -f "$backPath\$tmpFileName" "$($targetFile.Name)" 2>&1
+                            #Write-Verbose "Moving $backPath\$tmpFileName to $($targetFile.Name)"
+                            git mv -f "$backPath\$tmpFileName" "$($targetFile.Name)" 2>&1 | out-host
                             
                             # Return to original location
                             Pop-Location
-                            
-                            if (-not (Test-Path -Path $relativePath)) {
-                                Write-Verbose "$relativePath did not get created!"   
-                            } else {
-                                Write-Verbose "$relativePath did get created!"   
-                            }
 
-                        }
-                        
-                        $ErrorActionPreference = $originalPreference
-                        if ($out -is [System.Management.Automation.ErrorRecord]) {
-                            $out | out-host
-                            $found = Test-Path -path "$sourceRelativePath" -erroraction silentlycontinue
-                            Write-Verbose "Git mv $sourceRelativePath to  $relativePath failed (source exists $found)"
-
-                            $status = git show --name-only $sourcehash 2>&1
-                            $status | out-host
-                            throw $out
-                        }
+                        } 
 
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath"
