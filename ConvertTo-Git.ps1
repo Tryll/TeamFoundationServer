@@ -915,6 +915,7 @@ foreach ($cs in $sortedHistory) {
 
                         # Get the relative path to the target directory
                         $targetDir = $targetFile.DirectoryName
+                        $targetFileName = $targetFile.Name
                         $relativeTargetDir = $targetDir.Substring((pwd).Path.Length).Trim("\")
         
                         # Go into target directory
@@ -925,9 +926,9 @@ foreach ($cs in $sortedHistory) {
                                                 
                         # Second move: temp file to target
                         #Write-Verbose "Moving $backPath\$tmpFileName to $($targetFile.Name)"
-                        git mv -f "$backPath\$tmpFileName" "$($targetFile.Name)"
+                        git mv -f "$backPath\$tmpFileName" "$targetFileName"
 
-                        dir
+                        dir $targetFileName
 
                         # Return to branch root
                         Pop-Location
