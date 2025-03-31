@@ -858,8 +858,7 @@ foreach ($cs in $sortedHistory) {
                             } else {
 
                                 $status = git show --name-only $sourcehash 2>&1
-                                write-verbose $status
-                                Write-verbose $out
+                                $status | out-host
                                 Write-verbose ($changeItem | convertto-json)
                                 Write-Verbose "Something whent wrong with git checkout [$sourcehash] $sourceRelativePath"
 

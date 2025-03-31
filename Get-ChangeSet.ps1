@@ -7,6 +7,9 @@ param(
     [Parameter(Mandatory=$true)]
     [int]$ChangesetId = 0,
     
+    [Parameter(Mandatory=$false, ParameterSetName="UseWindows")]
+    [switch]$WithTFSOrdering,
+
 
     [Parameter(Mandatory=$false, ParameterSetName="UseWindows")]
     [switch]$UseWindows,
@@ -28,6 +31,66 @@ param(
   
 )
 
+# region functions
+
+<#
+.SYNOPSIS
+Sorts TFS change items to ensure Rename operations appear before their corresponding Add operations.
+
+.DESCRIPTION
+This function reorders an array of TFS change items by swapping positions of Rename and Add operations
+for the same file paths, ensuring that Rename operations are processed before Add operations.
+#>
+function Sort-TfsChangeItems {
+    param (
+        [Parameter(Mandatory=$true)]
+        [array]$changes
+    )
+    
+    # Clone the array to avoid modifying the original
+    $sorted = $changes.Clone()
+    
+    # Track Add files based on their path
+    $addItems = @{}
+    $idx = 0
+
+    foreach ($change in $sorted) {
+
+        # Track adds for files:
+        if (($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add) -and 
+            ($change.Item.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File)) {
+            
+            Write-Verbose "Sort-TfsChangeItems tracking $($change.Item.ServerItem)"
+            $addItems[$change.Item.ServerItem] = $idx++
+            
+        }   
+
+        # Switch renames for files that match existing, so renames comes before adds
+        if (($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) -and 
+            ($change.Item.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) -and
+            $change.MergeSources.Count -gt 0 -and 
+            $addItems.ContainsKey($change.MergeSources[0].ServerItem)) {
+            
+            Write-Verbose "Sort-TfsChangeItems moving Rename before Add for $($change.MergeSources[0].ServerItem)"
+
+            # Get the original Add change
+            $origAddIdx = $addItems[$change.MergeSources[0].ServerItem]
+            $origAddChange = $sorted[$origAddIdx]
+            
+            # Swap positions (put Rename before Add)
+            $sorted[$origAddIdx] = $change
+            $sorted[$idx] = $origAddChange
+            
+            # Update the index in the tracking dictionary
+            $addItems[$change.MergeSources[0].ServerItem] = $idx
+        } 
+        
+    }
+
+    return $sorted
+}
+
+# end region functions
 
 
 # Check if required .NET assemblies are available
@@ -120,4 +183,14 @@ try {
     exit 1
 }
 
-$vcs.GetChangeset($ChangesetId) | convertto-json
+$changeset = $vcs.GetChangeset($ChangesetId) 
+$changeset | convertto-json
+$changes= $vcs.GetChangesForChangeset($ChangesetId, $true,  [int]::MaxValue, $null, $null, $true)
+
+
+if ($WithTFSOrdering) {
+    Write-Host "Sorting changes to ensure Rename operations appear before Add operations..." -ForegroundColor Cyan
+    $changes = Sort-TfsChangeItems -changes $changes
+}
+
+$changes | convertto-json
