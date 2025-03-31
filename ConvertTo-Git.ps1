@@ -892,7 +892,7 @@ foreach ($cs in $sortedHistory) {
                         Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
 
                         # Ensure folder structure exists, and remove the target file
-                        $targetFile = new-item -path $relativePath -type file -force  -erroraction SilentlyContinue | Out-Null
+                        $targetFile = new-item -path $relativePath -type file -force -erroraction SilentlyContinue 
                         remove-item -path $relativePath -force -erroraction SilentlyContinue | Out-Null
 
                         # Move source to target
@@ -920,7 +920,7 @@ foreach ($cs in $sortedHistory) {
                             # Get the relative path to the target directory
                             $targetDir = $targetFile.DirectoryName
                             $relativeTargetDir = $targetDir.Substring((pwd).Path.Length)
-                            
+                            Write-Verbose "$targetDir => $relativeTargetDir"   
                             # Go into target directory
                             Push-Location $targetDir
                             
