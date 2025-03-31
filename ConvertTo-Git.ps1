@@ -826,17 +826,18 @@ foreach ($cs in $sortedHistory) {
 
                     # CHECKOUT from hash, it that exists - else file is local to branch:
                     if ($sourcehash -ne $null) {
-                        Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
+                        Write-Verbose "Checking out $sourceRelativePath from $sourcehash, $relativePath exists? $(Test-Path -path $relativePath -erroraction silentlycontinue)"
+                        
+                        $existsBeforeCheckout = Test-Path -path $relativePath -erroraction silentlycontinue
                         $originalPreference = $ErrorActionPreference
                         $ErrorActionPreference = 'Continue'
-
                         $out=git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
                         $ErrorActionPreference = $originalPreference
 
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
 
                             if ($changeItem.DeletionId -gt 0) {
-
+                                $out | out-host
                                 # Decision: Will not forward merge deleted items, by findit it and removing it.
                                 # This could lead to a problem later when a file is request "undeleted", we'll have to look it up at that time.
                                 # This approach keeps GIT history correct.
@@ -845,15 +846,16 @@ foreach ($cs in $sortedHistory) {
                                 # Avoiding move processing
                                 $sourceRelativePath = $relativePath
 
-                                # Alternatively find the file:
-                                # file was not found, attempt undelete, it will have to pass QC
-                                #Write-Verbose "Checking out $sourceRelativePath from $sourcehash ^1"
+                                # Check if file was successfully checked out -even though it was supposed to be deleted
+                                if (-not $existsBeforeCheckout -and (Test-Path -path $relativePath -erroraction silentlycontinue)) {
+                                    Write-Verbose "Removing $relativePath, as it was deleted in TFS"
+                                    $originalPreference = $ErrorActionPreference
+                                    $ErrorActionPreference = 'Continue'
+                                    # Remove the file or directory
+                                    $out=git rm -f "$relativePath" 2>&1
+                                    $ErrorActionPreference = $originalPreference
+                                } 
 
-                                #$out=git checkout -f $sourcehash^1 -- "$sourceRelativePath" 2>&1
-                                #if ($out -is [System.Management.Automation.ErrorRecord]) {
-                                    #throw $out
-                                #}
-                                #Write-Verbose "$sourceRelativePath was undeleted from parent to $sourcehash : $out"
                                 
                             } else {
 
