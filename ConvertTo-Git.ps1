@@ -910,7 +910,7 @@ foreach ($cs in $sortedHistory) {
                             } 
                         } while (Test-Path -path $tmpFileName)
                         
-                        # Git mv cannot handle long filenames properly, going via intermediate file
+                        # Git mv cannot handle long filenames properly, going via temp file and backPath fetching (workaround) 
                         $out = git mv -f "$sourceRelativePath" "$tmpFileName" 2>&1
                         if (-not (Test-Path -path $tmpFileName)) {
                             Write-Verbose "$tmpFileName did not get created!"   
