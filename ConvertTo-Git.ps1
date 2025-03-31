@@ -856,6 +856,8 @@ foreach ($cs in $sortedHistory) {
                         $out=git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
                         $ErrorActionPreference = $originalPreference
 
+                        
+
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
 
                             if ($changeItem.DeletionId -gt 0) {
@@ -907,8 +909,9 @@ foreach ($cs in $sortedHistory) {
                         } while (Test-Path -path $tmpFileName)
                         
                         # Windows/Powershell/Git mv cannot handle long filenames properly, going via temp file and backPath fetching (fubar) 
-                        git mv -f "$sourceRelativePath" "$tmpFileName" 2>&1 | out-host
-                     
+                        git mv -f "$sourceRelativePath" "$tmpFileName" 
+                        
+                        dir $tmpFileName
 
                         # Get the relative path to the target directory
                         $targetDir = $targetFile.DirectoryName
@@ -919,11 +922,13 @@ foreach ($cs in $sortedHistory) {
                         
                         # Calculate path back to the temp file
                         $backPath = "..\" * $relativeTargetDir.Split("\").Count
-                        
+                                                
                         # Second move: temp file to target
                         #Write-Verbose "Moving $backPath\$tmpFileName to $($targetFile.Name)"
-                        git mv -f "$backPath\$tmpFileName" "$($targetFile.Name)" 2>&1 | out-host
-                        
+                        git mv -f "$backPath\$tmpFileName" "$($targetFile.Name)"
+
+                        dir $($targetFile.Name)
+
                         # Return to branch root
                         Pop-Location
 
