@@ -1,5 +1,5 @@
 <#
-.SYNO-OPSIS
+.SYNOPSIS
     Converts a TFVC repository to Git while preserving complete history and branch structure.
 
 .DESCRIPTION
@@ -344,7 +344,7 @@ function Get-SourceItem {
 }
 
 <#
-.SYNO-OPSIS
+.SYNOPSIS
 Sorts TFS change items to ensure Rename operations appear before their corresponding Add operations.
 
 .DESCRIPTION
