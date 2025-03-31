@@ -558,6 +558,8 @@ pop-location
 $longPathsValue = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -ErrorAction SilentlyContinue
 if ($null -eq $longPathsValue -or $longPathsValue.LongPathsEnabled -ne 1) {
     Write-Host "Warning: Long Paths not enabled!" -ForegroundColor Cyan
+} else {
+    Write-Host "Confirmed Long Paths is enabled"
 }
 
 # Track all branches, with default branch first:
