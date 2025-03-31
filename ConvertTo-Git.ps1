@@ -1,5 +1,5 @@
 <#
-.SYNOPSIS
+.SYNO-OPSIS
     Converts a TFVC repository to Git while preserving complete history and branch structure.
 
 .DESCRIPTION
@@ -344,7 +344,7 @@ function Get-SourceItem {
 }
 
 <#
-.SYNOPSIS
+.SYNO-OPSIS
 Sorts TFS change items to ensure Rename operations appear before their corresponding Add operations.
 
 .DESCRIPTION
@@ -733,7 +733,19 @@ foreach ($cs in $sortedHistory) {
 
                     # "Merge" operations on TFS without Edit or Branch is really nothing, and can be ignored - from the perspective of GIT.
                     if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
-                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging without Edit/Branch is a no-op in GIT" -ForegroundColor Gray
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging without Edit/Branch is a NO-OP in GIT" -ForegroundColor Gray
+                        # There is nothing to check
+                        $qualityCheckNotApplicable = $true
+
+                        # Next item!
+                        continue
+                    }
+
+                     # "Delete" + "Merge" + "SourceRename" => a file was renamed (and the source file "deleted") originally, there is nothing to track here as there is nothing to do.
+                     if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -and 
+                                          $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename -and
+                                          $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete)) {
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Delete+Merge+SourceName is a NO-OP in GIT" -ForegroundColor Gray
                         # There is nothing to check
                         $qualityCheckNotApplicable = $true
 
@@ -826,9 +838,8 @@ foreach ($cs in $sortedHistory) {
 
                     # CHECKOUT from hash, it that exists - else file is local to branch:
                     if ($sourcehash -ne $null) {
-                        Write-Verbose "Checking out $sourceRelativePath from $sourcehash, $relativePath exists? $(Test-Path -path $relativePath -erroraction silentlycontinue)"
-                        
-                        $existsBeforeCheckout = Test-Path -path $relativePath -erroraction silentlycontinue
+                        Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
+
                         $originalPreference = $ErrorActionPreference
                         $ErrorActionPreference = 'Continue'
                         $out=git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
@@ -845,17 +856,6 @@ foreach ($cs in $sortedHistory) {
                                 $fileDeleted = $true
                                 # Avoiding move processing
                                 $sourceRelativePath = $relativePath
-
-                                # Check if file was successfully checked out -even though it was supposed to be deleted
-                                if (-not $existsBeforeCheckout -and (Test-Path -path $relativePath -erroraction silentlycontinue)) {
-                                    Write-Verbose "Removing $relativePath, as it was deleted in TFS"
-                                    $originalPreference = $ErrorActionPreference
-                                    $ErrorActionPreference = 'Continue'
-                                    # Remove the file or directory
-                                    $out=git rm -f "$relativePath" 2>&1
-                                    $ErrorActionPreference = $originalPreference
-                                } 
-
                                 
                             } else {
 
