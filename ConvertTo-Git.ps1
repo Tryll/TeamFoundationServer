@@ -906,30 +906,28 @@ foreach ($cs in $sortedHistory) {
                             } 
                         } while (Test-Path -path $tmpFileName)
                         
-                        # Git mv cannot handle long filenames properly, going via temp file and backPath fetching (workaround) 
+                        # Windows/Powershell/Git mv cannot handle long filenames properly, going via temp file and backPath fetching (fubar) 
                         git mv -f "$sourceRelativePath" "$tmpFileName" 2>&1 | out-host
+                     
+
+                        # Get the relative path to the target directory
+                        $targetDir = $targetFile.DirectoryName
+                        $relativeTargetDir = $targetDir.Substring((pwd).Path.Length).Trim("\")
+        
+                        # Go into target directory
+                        Push-Location $targetDir
                         
-                        if (Test-Path -path $tmpFileName) {
+                        # Calculate path back to the temp file
+                        $backPath = "..\" * $relativeTargetDir.Split("\").Count
+                        
+                        # Second move: temp file to target
+                        #Write-Verbose "Moving $backPath\$tmpFileName to $($targetFile.Name)"
+                        git mv -f "$backPath\$tmpFileName" "$($targetFile.Name)" 2>&1 | out-host
+                        
+                        # Return to branch root
+                        Pop-Location
 
-                            # Get the relative path to the target directory
-                            $targetDir = $targetFile.DirectoryName
-                            $relativeTargetDir = $targetDir.Substring((pwd).Path.Length).Trim("\")
-           
-                            # Go into target directory
-                            Push-Location $targetDir
-                            
-                            # Calculate path back to the temp file
-                            $backPath = "..\" * $relativeTargetDir.Split("\").Count
-                            
-                            # Second move: temp file to target
-                            #Write-Verbose "Moving $backPath\$tmpFileName to $($targetFile.Name)"
-                            git mv -f "$backPath\$tmpFileName" "$($targetFile.Name)" 2>&1 | out-host
-                            
-                            # Return to original location
-                            Pop-Location
-
-                        } 
-
+                   
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath"
                             # Revert the original sourcerelativePath
