@@ -892,7 +892,7 @@ foreach ($cs in $sortedHistory) {
                         Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
 
                         # Ensure folder structure exists, and remove the target file
-                        new-item -path $relativePath -type file -force  -erroraction SilentlyContinue | Out-Null
+                        $targetFile = new-item -path $relativePath -type file -force  -erroraction SilentlyContinue | Out-Null
                         remove-item -path $relativePath -force -erroraction SilentlyContinue | Out-Null
 
                         # Move source to target
@@ -916,19 +916,33 @@ foreach ($cs in $sortedHistory) {
                             Write-Verbose "$tmpFileName did not get created!"   
                         } else {
                             Write-Verbose "$tmpFileName did get created!"   
-                        }
-                        if (-not ($out -is [System.Management.Automation.ErrorRecord])) {
-                            $out = git mv -f "$tmpFileName" "$relativePath" 2>&1
 
-                            if (-not (Test-Path -path $relativePath)) {
-                                Write-Verbose "$relativePath did not get created! Trying manually:"   
-                                new-item -path $relativePath -type file -force 
-                                dir $relativePath
-                                "" > $relativePath
-                                dir $relativePath
+                            # Get the relative path to the target directory
+                            $targetDir = $targetFile.DirectoryName
+                            $relativeTargetDir = $targetDir.Substring((pwd).Path.Length)
+                            
+                            # Go into target directory
+                            Push-Location $targetDir
+                            
+                            # Calculate path back to the temp file
+                            $backPath = ".."
+                            for ($i = 0; $i -lt ($relativeTargetDir.Split("\").Count - 1); $i++) {
+                                $backPath += "\.."
+                            }
+                            
+                            # Second move: temp file to target
+                            Write-Verbose "Moving $backPath\$tmpFileName to $($targetFile.Name)"
+                            $out = git mv -f "$backPath\$tmpFileName" "$($targetFile.Name)" 2>&1
+                            
+                            # Return to original location
+                            Pop-Location
+                            
+                            if (-not (Test-Path -Path $relativePath)) {
+                                Write-Verbose "$relativePath did not get created!"   
                             } else {
                                 Write-Verbose "$relativePath did get created!"   
                             }
+
                         }
                         
                         $ErrorActionPreference = $originalPreference
