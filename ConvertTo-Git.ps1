@@ -899,13 +899,21 @@ foreach ($cs in $sortedHistory) {
                         $ErrorActionPreference = 'Continue'
 
                         # This just fails from time to time, unable to find the source file even though case and git show confirms it
-                        #$out = git mv -f "$sourceRelativePath" "$relativePath" 2>&1
-                        move-item -path $sourceRelativePath -destination $relativePath -force
-                        $out = git rm -f $sourceRelativePath 2>&1
+                
+                        $tmpFileName =""
+                        $max=0
+                        do {
+                            $tmpFileName = [System.IO.Path]::GetRandomFileName()
+                            if (($max++) -gt 100) throw("unable to generate random intermediate filename")
+                        } while (Test-Path -path $tmpFileName)
+                        
+                        # Git mv cannot handle long filenames properly, going via intermediate file
+                        $out = git mv -f "$sourceRelativePath" "$tmpFileName" 2>&1
                         if (-not ($out -is [System.Management.Automation.ErrorRecord])) {
-                            $out = git add -f $relativePath 2>&1
+                            $out = git mv -f "$tmpFileName" "$relativePath" 2>&1
                         }
 
+                        
                         $ErrorActionPreference = $originalPreference
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
                             $out | out-host
