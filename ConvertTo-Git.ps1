@@ -885,9 +885,16 @@ foreach ($cs in $sortedHistory) {
                         remove-item -path $relativePath -force -erroraction SilentlyContinue | Out-Null
 
                         # Move source to target
+                        $originalPreference = $ErrorActionPreference
+                        $ErrorActionPreference = 'Continue'
+
                         $out = git mv -f "$sourceRelativePath" "$relativePath" 2>&1
+
+                        $ErrorActionPreference = $originalPreference
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
-                            Write-Verbose "Git mv $relativePath failed"
+                            $out | out-host
+
+                            Write-Verbose "Git mv $sourceRelativePath to  $relativePath failed"
                             throw $out
                         }
 
