@@ -904,7 +904,9 @@ foreach ($cs in $sortedHistory) {
                         $max=0
                         do {
                             $tmpFileName = [System.IO.Path]::GetRandomFileName()
-                            if (($max++) -gt 100) throw("unable to generate random intermediate filename")
+                            if (($max++) -gt 100) {
+                                    throw("unable to generate random intermediate filename")
+                            } 
                         } while (Test-Path -path $tmpFileName)
                         
                         # Git mv cannot handle long filenames properly, going via intermediate file
