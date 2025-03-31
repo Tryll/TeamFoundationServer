@@ -560,7 +560,6 @@ if ($null -eq $longPathsValue -or $longPathsValue.LongPathsEnabled -ne 1) {
     Write-Host "Warning: Long Paths not enabled!" -ForegroundColor Cyan
 }
 
-
 # Track all branches, with default branch first:
 $branches = @{
     # The first and default branch and  way to catch all floating TFS folders
@@ -899,8 +898,11 @@ foreach ($cs in $sortedHistory) {
                         $ErrorActionPreference = $originalPreference
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
                             $out | out-host
+                            $found = Test-Path -path "$sourceRelativePath" -erroraction silentlycontinue
+                            Write-Verbose "Git mv $sourceRelativePath to  $relativePath failed (source exists $found)"
 
-                            Write-Verbose "Git mv $sourceRelativePath to  $relativePath failed"
+                            $status = git show --name-only $sourcehash 2>&1
+                            $status | out-host
                             throw $out
                         }
 
