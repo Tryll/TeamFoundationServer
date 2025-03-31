@@ -914,16 +914,17 @@ foreach ($cs in $sortedHistory) {
                         $out = git mv -f "$sourceRelativePath" "$tmpFileName" 2>&1
                         if (-not (Test-Path -path $tmpFileName)) {
                             Write-Verbose "$tmpFileName did not get created!"   
+                        } else {
+                            Write-Verbose "$tmpFileName did get created!"   
                         }
                         if (-not ($out -is [System.Management.Automation.ErrorRecord])) {
                             $out = git mv -f "$tmpFileName" "$relativePath" 2>&1
 
                             if (-not (Test-Path -path $relativePath)) {
                                 Write-Verbose "$relativePath did not get created!"   
+                            } else {
+                                Write-Verbose "$relativePath did get created!"   
                             }
-                        }
-                        if (-not (Test-Path -path $relativePath)) {
-                                Write-Verbose "$relativePath did not get created 2!"   
                         }
                         
                         $ErrorActionPreference = $originalPreference
