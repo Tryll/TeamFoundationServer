@@ -610,6 +610,7 @@ Write-Host "Found $totalChangesets changesets - processing from oldest to newest
 $processedChangesets = 0
 $processedItems = 0
 
+$gitGCCounter =0
 $branchHashTracker = @{}
 
 # Process each changeset
@@ -1144,6 +1145,8 @@ foreach ($cs in $sortedHistory) {
             Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted" -ForegroundColor Gray
             pop-location
 
+            $gitGCCounter++
+
         }
 
     } finally {
@@ -1156,7 +1159,14 @@ foreach ($cs in $sortedHistory) {
         Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
         Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
     }
+    
    
+    if ($gitGCCounter -gt 20) {
+        $gitGCCounter = 0
+        Write-Verbose "Performing git garbage collection, every 20'th commit"
+        git gc --quiet
+    }
+
 
     Write-Host "[TFS-$changesetId] Changeset Completed!" -ForegroundColor Green
     Write-Host ""
