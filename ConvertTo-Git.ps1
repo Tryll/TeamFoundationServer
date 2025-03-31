@@ -919,16 +919,13 @@ foreach ($cs in $sortedHistory) {
 
                             # Get the relative path to the target directory
                             $targetDir = $targetFile.DirectoryName
-                            $relativeTargetDir = $targetDir.Substring((pwd).Path.Length)
+                            $relativeTargetDir = $targetDir.Substring((pwd).Path.Length).Trim("\")
                             Write-Verbose "$targetDir => $relativeTargetDir"   
                             # Go into target directory
                             Push-Location $targetDir
                             
                             # Calculate path back to the temp file
-                            $backPath = ".."
-                            for ($i = 0; $i -lt ($relativeTargetDir.Split("\").Count - 1); $i++) {
-                                $backPath += "\.."
-                            }
+                            $backPath = "..\" * $relativeTargetDir.Split("\").Count
                             
                             # Second move: temp file to target
                             Write-Verbose "Moving $backPath\$tmpFileName to $($targetFile.Name)"
