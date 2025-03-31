@@ -920,7 +920,7 @@ foreach ($cs in $sortedHistory) {
                             # Get the relative path to the target directory
                             $targetDir = $targetFile.DirectoryName
                             $relativeTargetDir = $targetDir.Substring((pwd).Path.Length).Trim("\")
-                            Write-Verbose "$targetDir => $relativeTargetDir"   
+           
                             # Go into target directory
                             Push-Location $targetDir
                             
