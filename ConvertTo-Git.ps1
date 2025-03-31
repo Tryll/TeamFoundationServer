@@ -909,7 +909,7 @@ foreach ($cs in $sortedHistory) {
                         $originalPreference = $ErrorActionPreference
                         $ErrorActionPreference = 'Continue'
 
-                        $out = git mv -f -- "$sourceRelativePath" "$relativePath" 2>&1
+                        $out = git mv -f "$sourceRelativePath" "$relativePath" 2>&1
 
                         $ErrorActionPreference = $originalPreference
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
