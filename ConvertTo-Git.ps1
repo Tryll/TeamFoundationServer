@@ -928,6 +928,7 @@ foreach ($cs in $sortedHistory) {
                         #Write-Verbose "Moving $backPath\$tmpFileName to $($targetFile.Name)"
                         git mv -f "$backPath\$tmpFileName" "$targetFileName"
 
+                        dir
                         dir $targetFileName
 
                         # Return to branch root
