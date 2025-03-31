@@ -921,7 +921,11 @@ foreach ($cs in $sortedHistory) {
                             $out = git mv -f "$tmpFileName" "$relativePath" 2>&1
 
                             if (-not (Test-Path -path $relativePath)) {
-                                Write-Verbose "$relativePath did not get created!"   
+                                Write-Verbose "$relativePath did not get created! Trying manually:"   
+                                new-item -path $relativePath -type file -force 
+                                dir $relativePath
+                                "" > $relativePath
+                                dir $relativePath
                             } else {
                                 Write-Verbose "$relativePath did get created!"   
                             }
