@@ -228,17 +228,6 @@ function Add-GitBranch {
         throw ("Add-GitBranch: Work tree creation failed, to long paths? ")
     }
 
-    # For some reason git config is not persistent, specially for "ignorecase".
-    # Setting per branch to try to force it
-
-    # Default Git settings
-    git config core.autocrlf false
-    git config core.longpaths true
-    # Old TFS checkins are case-insensitive, so we need to ignore case.
-    git config core.ignorecase true
-    # Disable special unicode file name treatments
-    git config core.quotepath false
-
     pop-location
 
     $branchCount++
@@ -562,19 +551,15 @@ git config core.ignorecase true
 # Disable special unicode file name treatments
 git config core.quotepath false
 
-# Try to ensure this is set globally, will work as part of pipeline
-try {
-    git config --global core.autocrlf false
-    git config --global core.longpaths true
-    git config --global core.ignorecase true
-    git config --global core.quotepath false
-} catch {
-    Write-Verbose "Unable to set Git global config"
-}
-
-
 git commit -m "init" --allow-empty
 pop-location
+
+
+$longPathsValue = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -ErrorAction SilentlyContinue
+if ($null -eq $longPathsValue -or $longPathsValue.LongPathsEnabled -ne 1) {
+    Write-Host "Warning: Long Paths not enabled!" -ForegroundColor Cyan
+}
+
 
 # Track all branches, with default branch first:
 $branches = @{
