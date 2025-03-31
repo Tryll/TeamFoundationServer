@@ -898,7 +898,13 @@ foreach ($cs in $sortedHistory) {
                         $originalPreference = $ErrorActionPreference
                         $ErrorActionPreference = 'Continue'
 
-                        $out = git mv -f "$sourceRelativePath" "$relativePath" 2>&1
+                        # This just fails from time to time, unable to find the source file even though case and git show confirms it
+                        #$out = git mv -f "$sourceRelativePath" "$relativePath" 2>&1
+                        move-item -path $sourceRelativePath -destination $relativePath -force
+                        $out = git rm -f $sourceRelativePath 2>&1
+                        if (-not ($out -is [System.Management.Automation.ErrorRecord])) {
+                            $out = git add -f $relativePath 2>&1
+                        }
 
                         $ErrorActionPreference = $originalPreference
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
