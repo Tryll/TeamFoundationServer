@@ -926,10 +926,7 @@ foreach ($cs in $sortedHistory) {
                                                 
                         # Second move: temp file to target
                         #Write-Verbose "Moving $backPath\$tmpFileName to $($targetFile.Name)"
-                        git mv -f "$backPath\$tmpFileName" "$tmpFileName"
-
-                        # Git mv is suffixing parts of the original filename onto our target, go via local filename
-                        git mv -f "$tmpFileName" "$targetFileName"
+                        git mv -f "$backPath\$tmpFileName" "$targetFileName"
 
                         dir
                         dir $targetFileName
