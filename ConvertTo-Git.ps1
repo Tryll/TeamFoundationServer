@@ -551,13 +551,10 @@ git init -b $projectBranch
 # Default Git settings
 git config core.autocrlf false
 git config core.longpaths true
-git config core.longPaths true
 # Old TFS checkins are case-insensitive, so we need to ignore case.
 git config core.ignorecase true
-git config core.ignoreCase true
 # Disable special unicode file name treatments
 git config core.quotepath false
-git config core.quotePath false
 
 git commit -m "init" --allow-empty
 pop-location
