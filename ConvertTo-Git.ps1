@@ -914,7 +914,7 @@ foreach ($cs in $sortedHistory) {
                         } while (Test-Path -path $tmpFileName)
                         
                         # Windows/Powershell/Git mv cannot handle long filenames properly, going via temp file and backPath fetching (fubar) 
-                        git mv -f "$sourceRelativePath" "$tmpFileName" 
+                        git mv "$sourceRelativePath" "$tmpFileName"  -fv
                         
                         dir $tmpFileName
 
@@ -931,7 +931,8 @@ foreach ($cs in $sortedHistory) {
                                                 
                         # Second move: temp file to target
                         #Write-Verbose "Moving $backPath\$tmpFileName to $($targetFile.Name)"
-                        git mv -f "$backPath\$tmpFileName" "$targetFileName"
+
+                        git mv "$backPath\$tmpFileName" "$targetFileName" -fv
 
                         dir
                         dir $targetFileName
