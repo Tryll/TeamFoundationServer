@@ -458,8 +458,8 @@ if (-not $tfAssemblyFound) {
 try {
     $gitVersion = git --version
     if ($gitVersion.ToUpper().Contains("WIN")) {
-        Write-Host "Windows versions of git are not recommended for large projects with long file paths (200+ chars). Preferablly Microsoft.Git or crosscompiled MSYS/CYGWin" -ForegroundColor Red
-        Write-Host "Example: winget install --id=Microsoft.Git -e"
+        Write-Host "Windows versions of git are not recommended for large projects with long file paths (200+ chars). " -ForegroundColor Red
+        Write-Host "Use latest from https://github.com/microsoft/git/releases/"
     }
 
     Write-Host "Git is available: $gitVersion" -ForegroundColor Green
