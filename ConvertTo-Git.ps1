@@ -506,6 +506,10 @@ git config --global core.quotepath false
 # Allow all folders
 git config --global --add safe.directory '*'
 
+git config --global --add safe.directory '/cygdrive/c/a/1/s/Source/main'
+git config --global --add safe.directory '/cygdrive/c/a/1/s/Source/*'
+
+
 # Initialize Git repository
 Write-Host "Initializing Git repository in $OutputPath..." -ForegroundColor Cyan
 Push-Location $OutputPath
