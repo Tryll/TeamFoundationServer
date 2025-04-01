@@ -564,17 +564,17 @@ takeown /f . /r /d y
 # Create the first main branch folder and initialize Git
 $d=mkdir $projectBranch
 push-location $projectBranch
-git init -v -b $projectBranch
+git init -b $projectBranch
 
 # Default Git settings
-git config -v core.autocrlf false
-git config -v core.longpaths true
+git config core.autocrlf false
+git config core.longpaths true
 # Old TFS checkins are case-insensitive, so we need to ignore case.
-git config -v core.ignorecase true
+git config core.ignorecase true
 # Disable special unicode file name treatments
-git config -v core.quotepath false
+git config core.quotepath false
 
-git commit -v  -m "init" --allow-empty
+git commit -m "init" --allow-empty
 
 pop-location
 
