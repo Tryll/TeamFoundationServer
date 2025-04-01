@@ -471,7 +471,7 @@ try {
             # Prepend the Git directory to the PATH environment variable
             $env:Path = "$path;" + $env:Path
         }  else {
-            Write-Host "$GitPath is not a full path to a git executable, ignoring"
+            Write-Host "$GitPath is not a full path to a git executable, ignoring" -ForegroundColor Red
         }
 
     }
