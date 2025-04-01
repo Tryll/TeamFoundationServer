@@ -136,6 +136,10 @@ param(
     [Parameter(Mandatory=$false)]
     [int]$FromChangesetId = 0,
 
+    [Parameter(Mandatory=$false)]
+    [string]$GitPath = $null,
+
+
     # Quality control effectively checks every iteration of a file, this will slow down the process, but ensure the files are correct.
     [Parameter(Mandatory=$false)]
     [switch]$WithQualityControl,
@@ -456,6 +460,22 @@ if (-not $tfAssemblyFound) {
 
 # Check if Git is installed
 try {
+    
+    if (-not [String]::IsNullOrEmpty($GitPath)) {
+      
+        if (Test-Path -path $GitPath -type file) {
+            $item = get-item -path $GitPath
+            $path = $item.DirectoryName            
+            Write-Host "Using $path for Git"
+            # Prepend the Git directory to the PATH environment variable
+            $env:Path = "$path;" + $env:Path
+        }  else {
+            Write-Host "$GitPath is not a full path to a file"
+        }
+
+    }
+
+
     $gitVersion = git --version
     if ($gitVersion.ToUpper().Contains("WIN")) {
         Write-Host "Windows versions of git are not recommended for large projects with long file paths (200+ chars). " -ForegroundColor Red
