@@ -457,6 +457,11 @@ if (-not $tfAssemblyFound) {
 # Check if Git is installed
 try {
     $gitVersion = git --version
+    if ($gitVersion.ToUpper().Contains("WIN")) {
+        Write-Host "Windows versions of git are not recommended for large projects with long file paths (200+ chars). Preferablly Microsoft.Git or crosscompiled MSYS/CYGWin" -ForegroundColor Red
+        Write-Host "Example: winget install --id=Microsoft.Git -e"
+    }
+
     Write-Host "Git is available: $gitVersion" -ForegroundColor Green
 } catch {
     Write-Host "Error: Git is not available. Please make sure Git is installed and in your PATH." -ForegroundColor Red
