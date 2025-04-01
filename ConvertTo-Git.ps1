@@ -558,6 +558,7 @@ $projectPath=$project.ServerItem
 $projectBranch = "main"
 Write-Host "Found project $projectPath"
 
+# Ensure we are owner form here on handles "dubious check" in git
 takeown /f . /r /d y
 
 # Create the first main branch folder and initialize Git
