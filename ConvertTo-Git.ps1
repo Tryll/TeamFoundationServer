@@ -931,8 +931,10 @@ foreach ($cs in $sortedHistory) {
                         "" > $targetFileName
                         dir $targetFileName
                         
-                        git config --get core.longpaths
-                        
+                        $result=git config --get core.longpaths
+                        Write-Host "Long paths $result"
+                        $d = $result | convertto-json
+                        Write-Host "Long paths 2: $d"
                         Invoke-Expression "git mv ""$backPath\$tmpFileName"" ""$targetFileName"" -fv"
 
                         dir
