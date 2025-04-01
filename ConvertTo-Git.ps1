@@ -923,7 +923,7 @@ foreach ($cs in $sortedHistory) {
                         $targetFile = new-item -path $relativePath -type file -force -erroraction SilentlyContinue 
                         remove-item -path $relativePath -force -erroraction SilentlyContinue | Out-Null
 
-                        git mv -f "$sourceRelativePath" "$relativePath"  2>&1
+                        git mv -f "$sourceRelativePath" "$relativePath"  2>&1 | Out-Host
                    
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath"
