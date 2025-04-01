@@ -493,7 +493,7 @@ if (!(Test-Path $OutputPath)) {
 
 # Ensure we are owner form here on handles "dubious check" in git
 takeown /f $OutputPath /r /d y
-$env:HOME=(get-item $outputPath).DirectoryName
+$env:HOME=(get-item $OutputPath).DirectoryName
 
 # Default Git settings
 git config --global core.autocrlf false
