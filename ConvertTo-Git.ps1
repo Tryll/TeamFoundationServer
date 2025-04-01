@@ -460,10 +460,11 @@ if (-not $tfAssemblyFound) {
 
 # Check if Git is installed
 try {
-    
+   
     if (-not [String]::IsNullOrEmpty($GitPath)) {
-      
-        if (Test-Path -path $GitPath -type file) {
+ 
+        if (Test-Path -path $GitPath -type leaf -erroraction silentlycontinue) {
+            "asd $GitPath"
             $item = get-item -path $GitPath
             $path = $item.DirectoryName            
             Write-Host "Using $path for Git"
