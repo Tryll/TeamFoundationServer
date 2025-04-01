@@ -566,6 +566,7 @@ $d=mkdir $projectBranch
 push-location $projectBranch
 git init -b $projectBranch
 
+cd .git
 # Default Git settings
 git config --local core.autocrlf false
 git config --local core.longpaths true
@@ -573,6 +574,8 @@ git config --local core.longpaths true
 git config --local core.ignorecase true
 # Disable special unicode file name treatments
 git config --local core.quotepath false
+
+cd ..
 
 git commit -m "init" --allow-empty
 
