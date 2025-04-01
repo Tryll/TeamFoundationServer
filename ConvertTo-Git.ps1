@@ -477,10 +477,6 @@ try {
 
 
     $gitVersion = git --version
-    if ($gitVersion.ToUpper().Contains("WIN")) {
-        Write-Host "Windows versions of git are not recommended for large projects with long file paths (200+ chars). " -ForegroundColor Red
-        Write-Host "Use latest from https://github.com/microsoft/git/releases/"
-    }
 
     Write-Host "Git is available: $gitVersion" -ForegroundColor Green
 } catch {
@@ -567,6 +563,7 @@ Write-Host "Found project $projectPath"
 $d=mkdir $projectBranch
 push-location $projectBranch
 git init -b $projectBranch
+git commit -m "init" --allow-empty
 
 # Default Git settings
 git config core.autocrlf false
@@ -576,7 +573,7 @@ git config core.ignorecase true
 # Disable special unicode file name treatments
 git config core.quotepath false
 
-git commit -m "init" --allow-empty
+
 pop-location
 
 
