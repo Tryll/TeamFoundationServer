@@ -915,7 +915,7 @@ foreach ($cs in $sortedHistory) {
                         
                        
                         # Windows/Powershell/Git mv cannot handle long filenames properly, going via temp file and backPath fetching (fubar) 
-                        Invoke-Expression "git mv ""sourceRelativePath"" ""$tmpFileName"" -fv"
+                        Invoke-Expression "git mv ""$sourceRelativePath"" ""$tmpFileName"" -fv"
                         dir $tmpFileName
 
                         # Get the relative path to the target directory
