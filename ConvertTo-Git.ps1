@@ -561,22 +561,25 @@ $projectBranch = "main"
 Write-Host "Found project $projectPath"
 
 $env:GIT_CONFIG_GLOBAL = Join-Path -path (pwd) -childpath ".gitconfig"
+# Default Git settings
+git config --global user.email "migrator@git"
+git config --global user.name "migrator"
+
+git config --global core.autocrlf false
+git config --global core.longpaths true
+# Old TFS checkins are case-insensitive, so we need to ignore case.
+git config --global core.ignorecase true
+# Disable special unicode file name treatments
+git config --global core.quotepath false
+
+git config --global --add safe.directory '*'
 
 # Create the first main branch folder and initialize Git
 $d=mkdir $projectBranch
 push-location $projectBranch
 git init -b $projectBranch
 
-# Default Git settings
-git config --global user.email "migrator@git"
-git config --global user.name "migrator"
 
-git config core.autocrlf false
-git config core.longpaths true
-# Old TFS checkins are case-insensitive, so we need to ignore case.
-git config  core.ignorecase true
-# Disable special unicode file name treatments
-git config  core.quotepath false
 
 git commit -m "init" --allow-empty
 
