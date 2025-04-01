@@ -931,7 +931,7 @@ foreach ($cs in $sortedHistory) {
                                                 
                         # Second move: temp file to target
                         #Write-Verbose "Moving $backPath\$tmpFileName to $($targetFile.Name)"
-
+                        
                         git mv "$backPath\$tmpFileName" "$targetFileName" -fv
 
                         dir
