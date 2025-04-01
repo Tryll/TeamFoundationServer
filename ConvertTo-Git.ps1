@@ -491,24 +491,6 @@ if (!(Test-Path $OutputPath)) {
 }
 
 
-# Ensure we are owner form here on handles "dubious check" in git
-takeown /f $OutputPath /r /d y
-$env:GIT_CONFIG_GLOBAL=(Join-Path -path (get-item -path $OutputPath).FullName -childpath .gitconfig)
-Write-Host $env:GIT_CONFIG_GLOBAL
-
-# Default Git settings
-git config --global core.autocrlf false
-git config --global core.longpaths true
-# Old TFS checkins are case-insensitive, so we need to ignore case.
-git config --global core.ignorecase true
-# Disable special unicode file name treatments
-git config --global core.quotepath false
-# Allow all folders
-git config --global --add safe.directory '*'
-
-git config --global --add safe.directory '/cygdrive/c/a/1/s/Source/main'
-git config --global --add safe.directory '/cygdrive/c/a/1/s/Source/*'
-
 
 # Initialize Git repository
 Write-Host "Initializing Git repository in $OutputPath..." -ForegroundColor Cyan
@@ -585,6 +567,13 @@ $d=mkdir $projectBranch
 push-location $projectBranch
 git init -b $projectBranch
 
+# Default Git settings
+git config core.autocrlf false
+git config core.longpaths true
+# Old TFS checkins are case-insensitive, so we need to ignore case.
+git config  core.ignorecase true
+# Disable special unicode file name treatments
+git config  core.quotepath false
 
 git commit -m "init" --allow-empty
 
