@@ -560,7 +560,7 @@ $projectPath=$project.ServerItem
 $projectBranch = "main"
 Write-Host "Found project $projectPath"
 
-
+$env:GIT_CONFIG_GLOBAL = Join-Path -path (pwd) -childpath ".gitconfig"
 
 # Create the first main branch folder and initialize Git
 $d=mkdir $projectBranch
