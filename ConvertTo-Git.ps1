@@ -902,8 +902,46 @@ foreach ($cs in $sortedHistory) {
                         $targetFile = new-item -path $relativePath -type file -force -erroraction SilentlyContinue 
                         remove-item -path $relativePath -force -erroraction SilentlyContinue | Out-Null
 
-                        # iex can handle long executions
-                        Invoke-Expression "git mv ""$sourceRelativePath"" ""$relativePath"" -fv"
+                        # This just fails from time to time, unable to find the source file even though case and git show confirms it
+                
+                        $tmpFileName =""
+                        $max=0
+                        do {
+                            $tmpFileName = [System.IO.Path]::GetRandomFileName()
+                            if (($max++) -gt 100) {
+                                    throw("unable to generate random intermediate filename")
+                            } 
+                        } while (Test-Path -path $tmpFileName)
+                        
+                       
+                        # Windows/Powershell/Git mv cannot handle long filenames properly, going via temp file and backPath fetching (fubar) 
+                        Invoke-Expression "git mv ""sourceRelativePath"" ""$tmpFileName"" -fv"
+                        dir $tmpFileName
+
+                        # Get the relative path to the target directory
+                        $targetDir = $targetFile.DirectoryName
+                        $targetFileName = $targetFile.Name
+                        $relativeTargetDir = $targetDir.Substring((pwd).Path.Length).Trim("\")
+        
+                        # Go into target directory
+                        Push-Location $targetDir
+                        
+                        # Calculate path back to the temp file
+                        $backPath = "..\" * $relativeTargetDir.Split("\").Count
+                                                
+                        # Second move: temp file to target
+                        Write-Verbose "Moving $backPath\$tmpFileName to $targetFileName"
+                        "" > $targetFileName
+                        dir $targetFileName
+
+                        Invoke-Expression "git mv ""$backPath\$tmpFileName"" ""$targetFileName"" -fv"
+
+                        dir
+                        dir $targetFileName
+
+                        # Return to branch root
+                        Pop-Location
+
                    
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath"
