@@ -567,12 +567,12 @@ push-location $projectBranch
 git init -b $projectBranch
 
 # Default Git settings
-git config --global core.autocrlf false
-git config --global core.longpaths true
+git config --local core.autocrlf false
+git config --local core.longpaths true
 # Old TFS checkins are case-insensitive, so we need to ignore case.
-git config --global core.ignorecase true
+git config --local core.ignorecase true
 # Disable special unicode file name treatments
-git config --global core.quotepath false
+git config --local core.quotepath false
 
 git commit -m "init" --allow-empty
 
