@@ -568,6 +568,9 @@ push-location $projectBranch
 git init -b $projectBranch
 
 # Default Git settings
+git config --global user.email "migrator@git"
+git config --global user.name "migrator"
+
 git config core.autocrlf false
 git config core.longpaths true
 # Old TFS checkins are case-insensitive, so we need to ignore case.
