@@ -935,7 +935,7 @@ foreach ($cs in $sortedHistory) {
                         Write-Host "Long paths $result"
                         $d = $result | convertto-json
                         Write-Host "Long paths 2: $d"
-                        Invoke-Expression "git mv ""$backPath\$tmpFileName"" ""$targetFileName"" -fv"
+                        Invoke-Expression "git mv ""$backPath$tmpFileName"" ""$targetFileName"" -fv"
 
                         dir
                         dir $targetFileName
