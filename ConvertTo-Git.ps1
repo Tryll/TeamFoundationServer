@@ -579,8 +579,6 @@ $d=mkdir $projectBranch
 push-location $projectBranch
 git init -b $projectBranch
 
-
-
 git commit -m "init" --allow-empty
 
 pop-location
