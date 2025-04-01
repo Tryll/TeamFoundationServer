@@ -567,6 +567,8 @@ push-location $projectBranch
 git init -b $projectBranch
 git commit -m "init" --allow-empty
 
+dir
+
 # Default Git settings
 git config core.autocrlf false
 git config core.longpaths true
