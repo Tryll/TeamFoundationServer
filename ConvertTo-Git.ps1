@@ -493,7 +493,7 @@ if (!(Test-Path $OutputPath)) {
 
 # Ensure we are owner form here on handles "dubious check" in git
 takeown /f $OutputPath /r /d y
-$env:GIT_CONFIG_GLOBAL=(get-item $OutputPath/.gitconfig).FullName
+$env:GIT_CONFIG_GLOBAL=(Join-Path -path (get-item -path $OutputPath).FullName -childpath .gitconfig)
 Write-Host $env:GIT_CONFIG_GLOBAL
 
 # Default Git settings
