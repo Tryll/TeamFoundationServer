@@ -493,6 +493,17 @@ if (!(Test-Path $OutputPath)) {
 
 # Ensure we are owner form here on handles "dubious check" in git
 takeown /f $OutputPath /r /d y
+$env:HOME=(get-item $outputPath).DirectoryName
+
+# Default Git settings
+git config --global core.autocrlf false
+git config --global core.longpaths true
+# Old TFS checkins are case-insensitive, so we need to ignore case.
+git config --global core.ignorecase true
+# Disable special unicode file name treatments
+git config --global core.quotepath false
+# Allow all folders
+git config --global --add safe.directory '*'
 
 # Initialize Git repository
 Write-Host "Initializing Git repository in $OutputPath..." -ForegroundColor Cyan
@@ -569,16 +580,6 @@ $d=mkdir $projectBranch
 push-location $projectBranch
 git init -b $projectBranch
 
-cd .git
-# Default Git settings
-git config --local core.autocrlf false
-git config --local core.longpaths true
-# Old TFS checkins are case-insensitive, so we need to ignore case.
-git config --local core.ignorecase true
-# Disable special unicode file name treatments
-git config --local core.quotepath false
-
-cd ..
 
 git commit -m "init" --allow-empty
 
@@ -714,11 +715,11 @@ foreach ($cs in $sortedHistory) {
         $branch = Get-GitBranch($tfsBranchPath)
 
         # Check if we have a branch change:
-        $gitPath =$branch.TfsPath
-        if ($gitPath -eq $projectPath) {
-            $gitPath+="/$projectBranch"
+        $path =$branch.TfsPath
+        if ($path -eq $projectPath) {
+            $path+="/$projectBranch"
         }
-        if ($branch -eq $null -or $gitPath -ne $tfsBranchPath) {
+        if ($branch -eq $null -or $path -ne $tfsBranchPath) {
             $branch = Add-GitBranch($tfsBranchPath)
             $branchName=$branch.Name 
             Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $itemPath - Creating branch $branchName" -ForegroundColor Yellow
