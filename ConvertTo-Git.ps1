@@ -558,19 +558,7 @@ $projectPath=$project.ServerItem
 $projectBranch = "main"
 Write-Host "Found project $projectPath"
 
-# Create a .gitconfig file in the same directory as git.exe
-$gitConfigContent = @"
-[safe]
-    directory = *
-"@
-
-# Save the config to a file in the same directory as git.exe
-$gitConfigContent | Out-File -FilePath .gitconfig -Encoding ascii
-
-# Set the GIT_CONFIG environment variable to point to this file
-$env:GIT_CONFIG = (get-item -path .gitconfig).FullName
-
-Write-Host $env:GIT_CONFIG
+takeown /f . /r /d y
 
 # Create the first main branch folder and initialize Git
 $d=mkdir $projectBranch
