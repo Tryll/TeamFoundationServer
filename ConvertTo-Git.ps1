@@ -1177,7 +1177,7 @@ foreach ($cs in $sortedHistory) {
     }
     
    
-    if ($gitGCCounter -gt 20) {
+    if ($gitGCCounter -gt 10) {
         $gitGCCounter = 0
         Write-Verbose "Performing git garbage collection, every 20'th commit"
         git gc --quiet
