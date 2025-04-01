@@ -558,7 +558,7 @@ $projectPath=$project.ServerItem
 $projectBranch = "main"
 Write-Host "Found project $projectPath"
 
-takeown /f . /r /d y
+$env:GIT_TEST_ASSUME_DIFFERENT_OWNER = 1
 
 # Create the first main branch folder and initialize Git
 $d=mkdir $projectBranch
