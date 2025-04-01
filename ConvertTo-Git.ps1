@@ -930,7 +930,9 @@ foreach ($cs in $sortedHistory) {
                         Write-Verbose "Moving $backPath\$tmpFileName to $targetFileName"
                         "" > $targetFileName
                         dir $targetFileName
-
+                        
+                        git config --get core.longpaths
+                        
                         Invoke-Expression "git mv ""$backPath\$tmpFileName"" ""$targetFileName"" -fv"
 
                         dir
