@@ -490,6 +490,10 @@ if (!(Test-Path $OutputPath)) {
     New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
 }
 
+
+# Ensure we are owner form here on handles "dubious check" in git
+takeown /f $OutputPath /r /d y
+
 # Initialize Git repository
 Write-Host "Initializing Git repository in $OutputPath..." -ForegroundColor Cyan
 Push-Location $OutputPath
@@ -558,8 +562,7 @@ $projectPath=$project.ServerItem
 $projectBranch = "main"
 Write-Host "Found project $projectPath"
 
-# Ensure we are owner form here on handles "dubious check" in git
-takeown /f . /r /d y
+
 
 # Create the first main branch folder and initialize Git
 $d=mkdir $projectBranch
