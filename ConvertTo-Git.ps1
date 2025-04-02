@@ -375,7 +375,7 @@ function Sort-TfsChangeItems {
         if (($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add) -and 
             ($change.Item.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File)) {
             
-            Write-Verbose "Sort-TfsChangeItems tracking $($change.Item.ServerItem)"
+          #  Write-Verbose "Sort-TfsChangeItems tracking $($change.Item.ServerItem)"
             $addItems[$change.Item.ServerItem] = $idx++
             
         }   
@@ -386,7 +386,7 @@ function Sort-TfsChangeItems {
             $change.MergeSources.Count -gt 0 -and 
             $addItems.ContainsKey($change.MergeSources[0].ServerItem)) {
             
-            Write-Verbose "Sort-TfsChangeItems moving Rename before Add for $($change.MergeSources[0].ServerItem)"
+        #    Write-Verbose "Sort-TfsChangeItems moving Rename before Add for $($change.MergeSources[0].ServerItem)"
 
             # Get the original Add change
             $origAddIdx = $addItems[$change.MergeSources[0].ServerItem]
