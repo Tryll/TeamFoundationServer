@@ -562,13 +562,14 @@ Write-Host "Found project $projectPath"
 
 $env:GIT_CONFIG_GLOBAL = Join-Path -path (pwd) -childpath ".gitconfig"
 # Default Git settings
-git config --global user.email "migrator@git"
-git config --global user.name "migrator"
+git config --global user.email "tfs@git"
+git config --global user.name "TFS migration"
 
 git config --global core.autocrlf false
 git config --global core.longpaths true
 # Old TFS checkins are case-insensitive, so we need to ignore case.
 git config --global core.ignorecase true
+
 # Disable special unicode file name treatments
 git config --global core.quotepath false
 
@@ -887,7 +888,7 @@ foreach ($cs in $sortedHistory) {
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
 
                             if ($changeItem.DeletionId -gt 0) {
-                                $out | out-host
+                                write-host ($out |convertto-json)
                                 # Decision: Will not forward merge deleted items, by findit it and removing it.
                                 # This could lead to a problem later when a file is request "undeleted", we'll have to look it up at that time.
                                 # This approach keeps GIT history correct.
@@ -897,9 +898,9 @@ foreach ($cs in $sortedHistory) {
                                 $sourceRelativePath = $relativePath
                                 
                             } else {
-
+                                write-host ($out |convertto-json)
                                 $status = git show --name-only $sourcehash 2>&1
-                                $status | out-host
+                              
                                 Write-verbose ($changeItem | convertto-json)
                                 Write-Verbose "Something whent wrong with git checkout [$sourcehash] $sourceRelativePath"
 
