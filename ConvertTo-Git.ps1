@@ -876,6 +876,10 @@ foreach ($cs in $sortedHistory) {
 
                     # CHECKOUT from hash, it that exists - else file is local to branch:
                     if ($sourcehash -ne $null) {
+
+                        # Fix for ignorecase not working? 
+                        $sourceRelativePath = git show --name-only $sourcehash 2>&1 | findstr /i "$sourceRelativePath"
+
                         Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
 
                         $originalPreference = $ErrorActionPreference
