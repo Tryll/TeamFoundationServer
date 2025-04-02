@@ -883,8 +883,6 @@ foreach ($cs in $sortedHistory) {
                         $out=git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
                         $ErrorActionPreference = $originalPreference
 
-                        
-
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
 
                             if ($changeItem.DeletionId -gt 0) {
