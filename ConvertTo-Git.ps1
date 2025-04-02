@@ -879,7 +879,7 @@ foreach ($cs in $sortedHistory) {
 
                         # Fix for ignorecase not working? 
                         $flipped=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
-                        $sourceRelativePath = git show --name-only $so¨urcehash 2>&1 | findstr /i "$flipped"
+                        $sourceRelativePath = git show --name-only $sourcehash 2>&1 | findstr /i "$flipped"
                         $sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip path seps back
 
                         Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
