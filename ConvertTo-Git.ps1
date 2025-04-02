@@ -875,7 +875,7 @@ foreach ($cs in $sortedHistory) {
                     # What do we do for branches created in same changeset that we want to copy from here!
 
                     # CHECKOUT from hash, it that exists - else file is local to branch:
-                    if ($sourcehash -ne $null && $changeOItem.DeletionId -eq 0) {
+                    if ($sourcehash -ne $null -and $changeOItem.DeletionId -eq 0) {
 
                         # We need to flip this and manually find the appropiate case for git to be able to find the items.
                         $flipped=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
