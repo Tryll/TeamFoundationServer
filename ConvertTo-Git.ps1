@@ -997,12 +997,12 @@ foreach ($cs in $sortedHistory) {
                     throw("Failed to download $itemPath to $relativePath")
                 }
 
-                
-                $out=git add "$relativePath" 2>&1
-                if ($out -is [System.Management.Automation.ErrorRecord]) {
-                    Write-Verbose "Git add $relativePath failed, for $($target.FullName)"
-                    throw $out
-                }
+                # This fails intermittently, maybe a add -A is better
+                #$out=git add "$relativePath" 2>&1
+                #if ($out -is [System.Management.Automation.ErrorRecord]) {
+                #    Write-Verbose "Git add $relativePath failed, for $($target.FullName)"
+                #    throw $out
+                #}
             }
 
 
