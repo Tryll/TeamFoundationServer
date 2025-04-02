@@ -875,9 +875,9 @@ foreach ($cs in $sortedHistory) {
                     # What do we do for branches created in same changeset that we want to copy from here!
 
                     # CHECKOUT from hash, it that exists - else file is local to branch:
-                    if ($sourcehash -ne $null) {
+                    if ($sourcehash -ne $null && $changeOItem.DeletionId -eq 0) {
 
-                        # Fix for ignorecase not working? 
+                        # We need to flip this and manually find the appropiate case for git to be able to find the items.
                         $flipped=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
                         $sourceRelativePath = git show --name-only $sourcehash 2>&1 | findstr /i "$flipped"
                         #$sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip path seps back
@@ -889,14 +889,26 @@ foreach ($cs in $sortedHistory) {
                         $out=git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
                         $ErrorActionPreference = $originalPreference
 
-                         # Flip path seps back
+                        # We need to flip this back for this to work
                         $sourceRelativePath = $sourceRelativePath.Replace("/","\")
-
+                        die $sourceRelativePath
 
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
 
-                            if ($changeItem.DeletionId -gt 0) {
-                                write-host ($out |convertto-json)
+                            write-host ($out |convertto-json)
+                            $status = git show --name-only $sourcehash 2>&1
+                            
+                            Write-verbose ($changeItem | convertto-json)
+                            Write-Verbose "Something whent wrong with git checkout [$sourcehash] $sourceRelativePath"
+
+                            throw ($out)
+
+                          
+                        }
+                       
+                    } else {
+                        if ($changeItem.DeletionId -gt 0) {
+                              
                                 # Decision: Will not forward merge deleted items, by findit it and removing it.
                                 # This could lead to a problem later when a file is request "undeleted", we'll have to look it up at that time.
                                 # This approach keeps GIT history correct.
@@ -905,20 +917,7 @@ foreach ($cs in $sortedHistory) {
                                 # Avoiding move processing
                                 $sourceRelativePath = $relativePath
                                 
-                            } else {
-                                write-host ($out |convertto-json)
-                                $status = git show --name-only $sourcehash 2>&1
-                              
-                                Write-verbose ($changeItem | convertto-json)
-                                Write-Verbose "Something whent wrong with git checkout [$sourcehash] $sourceRelativePath"
-
-                                throw ($out)
-
-                            }
-                            
-                      
-                        }
-                       
+                        } 
                     }
                     
 
