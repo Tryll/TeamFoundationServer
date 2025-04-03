@@ -338,7 +338,7 @@ function Get-SourceItem {
     }
 
     if ($Source.ChangesetId -ne $Source.ChangesetIdFrom) {
-        Write-Verbose "Get-SourceItem: Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
+        #Write-Verbose "Get-SourceItem: Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
         $lastFoundIn=0
         $lastFoundFile=""
         $gitLocalName = $Source.RelativePath.Replace("\","/")
@@ -350,7 +350,7 @@ function Get-SourceItem {
             if ($branchHashTracker.ContainsKey("$($Source.BranchName)-$i")) {
                 # Fetch hash from previous commit
                 $tryHash = $branchHashTracker["$($Source.BranchName)-$i"]
-              
+            
                 # Check if file is changed and part of this commit
                 $lastFoundFile = git show --name-only $tryHash 2>&1 | findstr /i "$gitLocalName"
                 if ($lastFoundFile -ne $null ) {
@@ -360,9 +360,15 @@ function Get-SourceItem {
                 }
             }
         }
+        if ($lastFoundIn -ne 0) {
+            Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" last changed in TFS-$lastFoundIn"
 
-        Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" last changed in TFS-$lastFoundIn"
-
+            $Source.ChangesetId = $lastFoundIn
+            # reverting back to windows format
+            $Source.RelativePath = $lastFoundfile.Replace("/","\"")         
+        }  else {
+            Write-Verbose "Get-SourceItem: Scan failed to find $($Source.RelativePath) for changeset range $($Source.ChangesetId)-$($Source.ChangesetIdFrom)"
+        }
     }
     
 
