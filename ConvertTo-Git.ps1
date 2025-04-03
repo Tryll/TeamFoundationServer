@@ -974,8 +974,8 @@ foreach ($cs in $sortedHistory) {
 
                      
                         Write-Verbose "Renaming intermediate native $sourceRelativePath to target $relativePath"
-                        git mv -f "$sourceRelativePath" "$relativePath"  2>&1 | Out-Host
-                        
+                        $out = git mv -f "$sourceRelativePath" "$relativePath"  2>&1 
+                        Write-Host ($out | convertto-json)
                     
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath"
