@@ -344,7 +344,7 @@ function Get-SourceItem {
         $gitLocalName = $Source.RelativePath.Replace("\","/")
 
         # Iterate from Top to Bottom, exit on first hit as this will be the newest change
-        for($i= $Source.ChangesetId; $i>= $Source.ChangesetIdFrom ;$i--) {
+        for($i= $Source.ChangesetId; $i -ge $Source.ChangesetIdFrom; $i--) {
 
             # Check if $i/"changesetid" is valid for this branch as a previous commit
             if ($branchHashTracker.ContainsKey("$($Source.BranchName)-$i")) {
