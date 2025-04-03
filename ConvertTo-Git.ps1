@@ -933,8 +933,7 @@ foreach ($cs in $sortedHistory) {
 
                         # We need to flip this back for this to work
                         $sourceRelativePath = $sourceRelativePath.Replace("/","\")
-                        die $sourceRelativePath
-
+                      
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
 
                             write-host ($out |convertto-json)
