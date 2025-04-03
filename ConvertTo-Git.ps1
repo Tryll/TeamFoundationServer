@@ -924,7 +924,7 @@ foreach ($cs in $sortedHistory) {
                     # CHECKOUT RENAME: Source and Destination is not the same : (GIT PROBLEMS:)
                     if ($sourceRelativePath -ne $relativePath) {
 
-                   
+                        $sourceRelativePath=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
                         Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
 
                         # Ensure folder structure exists, and remove the target file
@@ -933,6 +933,9 @@ foreach ($cs in $sortedHistory) {
 
                         git mv -f "$sourceRelativePath" "$relativePath"  2>&1 | Out-Host
                    
+
+                        $sourceRelativePath=$sourceRelativePath.Replace("/","\") # Flip to linux path seps
+
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath"
                             # Revert the original sourcerelativePath
