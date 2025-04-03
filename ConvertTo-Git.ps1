@@ -973,7 +973,6 @@ foreach ($cs in $sortedHistory) {
                         remove-item -path $relativePath -force -erroraction SilentlyContinue | Out-Null
 
                      
-
                         Write-Verbose "Renaming intermediate native $sourceRelativePath to target $relativePath"
                         git mv -f "$sourceRelativePath" "$relativePath"  2>&1 | Out-Host
                         
