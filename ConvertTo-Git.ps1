@@ -1047,6 +1047,18 @@ foreach ($cs in $sortedHistory) {
                         throw "stop here"
                     }
 
+                    # Flip to linux
+                    $relativePath = $relativePath.Replace("\","/").Trim()
+                    # Remove the file or directory
+                    $out=git add "$relativePath" 2>&1
+                    # Flip to windows
+                    $relativePath = $relativePath.Replace("/","\")
+                    
+                    if ($out -is [System.Management.Automation.ErrorRecord]) {
+                        Write-Host ($out |convertto-json )
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File download add failed" 
+                    } 
+
                     
                     $qualityCheckNotApplicable = $true
                     $fileDeleted = $false
@@ -1079,7 +1091,7 @@ foreach ($cs in $sortedHistory) {
                 $ErrorActionPreference = 'Continue'
 
                 # Flip to linux
-                $relativePath = $relativePath.Replace("\","/")
+                $relativePath = $relativePath.Replace("\","/").Trim()
                 # Remove the file or directory
                 $out=git rm -f "$relativePath" 2>&1
                 # Flip to windows
