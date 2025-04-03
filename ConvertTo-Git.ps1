@@ -339,6 +339,30 @@ function Get-SourceItem {
 
     if ($Source.ChangesetId -ne $Source.ChangesetIdFrom) {
         Write-Verbose "Get-SourceItem: Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
+        $lastFoundIn=0
+        $lastFoundFile=""
+        $gitLocalName = $Source.RelativePath.Replace("\","/")
+
+        # Iterate from Top to Bottom, exit on first hit as this will be the newest change
+        for($i= $Source.ChangesetId; $i>= $Source.ChangesetIdFrom ;$i--) {
+
+            # Check if $i/"changesetid" is valid for this branch as a previous commit
+            if ($branchHashTracker.ContainsKey("$($Source.BranchName)-$i")) {
+                # Fetch hash from previous commit
+                $tryHash = $branchHashTracker["$($Source.BranchName)-$i"]
+              
+                # Check if file is changed and part of this commit
+                $lastFoundFile = git show --name-only $tryHash 2>&1 | findstr /i "$gitLocalName"
+                if ($lastFoundFile -ne $null ) {
+                    $lastFoundIn=$i
+                    # Break on first hit
+                    break
+                }
+            }
+        }
+
+        Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" last changed in TFS-$lastFoundIn"
+
     }
     
 
@@ -757,6 +781,16 @@ foreach ($cs in $sortedHistory) {
                     $forceAddNoSource = $true
                 }
 
+                # TFS No Op in GIT
+                if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and 
+                    $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename) {
+
+                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Delete+SourceRename is NO-OP" -ForegroundColor Gray
+                    $qualityCheckNotApplicable = $true
+                    #Next Item!
+                    continue
+                }
+
 
                 # The change item is a branch/merge with a source reference
                 if (-not $forceAddNoSource -and $change.MergeSources.Count -gt 0) {
@@ -783,13 +817,14 @@ foreach ($cs in $sortedHistory) {
                      if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -and 
                                           $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename -and
                                           $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete)) {
-                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Delete+Merge+SourceName is a NO-OP in GIT" -ForegroundColor Gray
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Delete+Merge+SourceReName is a NO-OP in GIT" -ForegroundColor Gray
                         # There is nothing to check
                         $qualityCheckNotApplicable = $true
 
                         # Next item!
                         continue
                     }
+                    
 
 
 
