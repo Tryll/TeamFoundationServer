@@ -975,7 +975,7 @@ foreach ($cs in $sortedHistory) {
                         # Flip to linux style
                         $sourceRelativePath=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
                         $relativePath = $relativePath.Replace("\","/")
-                        
+
                         Write-Verbose "Renaming intermediate native $sourceRelativePath to target $relativePath"
                         $out=git mv -f "$sourceRelativePath" "$relativePath"  2>&1 
 
@@ -1078,13 +1078,19 @@ foreach ($cs in $sortedHistory) {
                 $originalPreference = $ErrorActionPreference
                 $ErrorActionPreference = 'Continue'
 
+                # Flip to linux
+                $relativePath = $relativePath.Replace("\","/")
                 # Remove the file or directory
                 $out=git rm -f "$relativePath" 2>&1
-                
+                # Flip to windows
+                $relativePath = $relativePath.Replace("/","\")
+
+
                 $ErrorActionPreference = $originalPreference
 
                 $fileDeleted = $true
                 if ($out -is [System.Management.Automation.ErrorRecord]) {
+                    Write-Host $out
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File allready deleted/missing. (TFS Supported)" 
                 } 
 
