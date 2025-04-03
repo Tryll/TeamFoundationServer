@@ -979,7 +979,7 @@ foreach ($cs in $sortedHistory) {
                         Write-Verbose "Renaming intermediate native $sourceRelativePath to target $relativePath"
                         git mv -f "$sourceRelativePath" "$relativePath"  2>&1 | Out-Host
                         
-                        $sourceRelativePath = $sourceRelativePath.Replace("/","\")
+                        $sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip back to windows
                         dir $sourceRelativePath
                         dir $relativePath
 
