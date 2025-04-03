@@ -980,9 +980,7 @@ foreach ($cs in $sortedHistory) {
                         git mv -f "$sourceRelativePath" "$relativePath"  2>&1 | Out-Host
                         
                         $sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip back to windows
-                        dir $sourceRelativePath
-                        dir $relativePath
-
+             
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath"
                             # Revert the original sourcerelativePath
