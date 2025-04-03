@@ -365,7 +365,8 @@ function Get-SourceItem {
 
             $Source.ChangesetId = $lastFoundIn
             # reverting back to windows format
-            $Source.RelativePath = $lastFoundfile.Replace("/","\")         
+            $Source.RelativePath = $lastFoundfile.Replace("/","\") 
+            $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]      
         }  else {
             Write-Verbose "Get-SourceItem: Scan failed to find $($Source.RelativePath) for changeset range $($Source.ChangesetId)-$($Source.ChangesetIdFrom)"
         }
