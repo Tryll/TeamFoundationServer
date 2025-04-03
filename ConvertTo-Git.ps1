@@ -972,15 +972,12 @@ foreach ($cs in $sortedHistory) {
                         $targetFile = new-item -path $relativePath -type file -force -erroraction SilentlyContinue 
                         remove-item -path $relativePath -force -erroraction SilentlyContinue | Out-Null
 
-                        # Does the file exist?
-                        dir $sourceRelativePath
-                        $flipped=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
-                        $sourceRelativePath = git show --name-only $sourcehash 2>&1 | ? { $_ -ieq "$flipped" }
+                     
+
                         Write-Verbose "Renaming intermediate native $sourceRelativePath to target $relativePath"
                         git mv -f "$sourceRelativePath" "$relativePath"  2>&1 | Out-Host
                         
-                        $sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip back to windows
-             
+                    
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath"
                             # Revert the original sourcerelativePath
