@@ -352,7 +352,7 @@ function Get-SourceItem {
                 $tryHash = $branchHashTracker["$($Source.BranchName)-$i"]
             
                 # Check if file is changed and part of this commit
-                $lastFoundFile = git show --name-only $tryHash 2>&1 | % { $_ -ieq "$gitLocalName" }
+                $lastFoundFile = git show --name-only $tryHash 2>&1 | ? { $_ -ieq "$gitLocalName" }
                 if ($lastFoundFile -ne $null ) {
                     $lastFoundIn=$i
                     # Break on first hit
@@ -921,7 +921,7 @@ foreach ($cs in $sortedHistory) {
 
                         # We need to flip this and manually find the appropiate case for git to be able to find the items.
                         $flipped=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
-                        $sourceRelativePath = git show --name-only $sourcehash 2>&1 | % { $_ -ieq "$flipped" }
+                        $sourceRelativePath = git show --name-only $sourcehash 2>&1 | ? { $_ -ieq "$flipped" }
                         #$sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip path seps back
 
                         Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
@@ -975,7 +975,7 @@ foreach ($cs in $sortedHistory) {
                         # Does the file exist?
                         dir $sourceRelativePath
                         $flipped=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
-                        $sourceRelativePath = git show --name-only $sourcehash 2>&1 | % { $_ -ieq "$flipped" }
+                        $sourceRelativePath = git show --name-only $sourcehash 2>&1 | ? { $_ -ieq "$flipped" }
                         Write-Verbose "Renaming intermediate native $sourceRelativePath to target $relativePath"
                         git mv -f "$sourceRelativePath" "$relativePath"  2>&1 | Out-Host
                         
