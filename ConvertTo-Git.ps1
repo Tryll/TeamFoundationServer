@@ -1090,7 +1090,7 @@ foreach ($cs in $sortedHistory) {
 
                 $fileDeleted = $true
                 if ($out -is [System.Management.Automation.ErrorRecord]) {
-                    Write-Host $out
+                    Write-Host ($out |convertto-json )
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File allready deleted/missing. (TFS Supported)" 
                 } 
 
