@@ -234,7 +234,6 @@ function Add-GitBranch {
 
     pop-location
 
-    $branchCount++
     return $branches[$fromContainer]
 }
 
@@ -636,7 +635,7 @@ $branches = @{
 }
 # track changes to branches, will git commit to each branch
 $branchChanges = @{}
-$branchCount = 0
+
 
 
 $fromVersion = $null
@@ -1260,7 +1259,7 @@ $duration = $endTime - $startTime
 
 Write-Host "`nConversion completed!" -ForegroundColor Green
 Write-Host "Total changesets processed: $processedChangesets" -ForegroundColor Green
-Write-Host "Total branches processed: $branchCount" -ForegroundColor Green
+Write-Host "Total branches processed: $($branches.Keys.Count)" -ForegroundColor Green
 Write-Host "Total files processed: $processedItems" -ForegroundColor Green
 Write-Host "Total conversion time: $($duration.Hours) hours, $($duration.Minutes) minutes, $($duration.Seconds) seconds" -ForegroundColor Green
 Write-Host "Git repository location: $OutputPath" -ForegroundColor Green
