@@ -721,8 +721,7 @@ foreach ($cs in $sortedHistory) {
 
         # Abort on mysterious change
         if ($change.MergeSources.Count -gt 1) {
-            $change | convertto-json
-            throw "Multiple merge sources is not supported"
+            Write-Warning "[TFS-$changesetId]  [$changeCounter/$changeCount] [$changeType] $itemPath Has multiple merge sources"
         } 
             
         # Skip changes not in the specified path
@@ -1053,7 +1052,7 @@ foreach ($cs in $sortedHistory) {
                     $out=git add "$relativePath" 2>&1
                     # Flip to windows
                     $relativePath = $relativePath.Replace("/","\")
-                    
+
                     if ($out -is [System.Management.Automation.ErrorRecord]) {
                         Write-Host ($out |convertto-json )
                         Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File download add failed" 
