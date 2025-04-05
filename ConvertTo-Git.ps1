@@ -227,12 +227,10 @@ function Add-GitBranch {
     
     push-location $sourceName
 
-    . $git branch $branchName | out-host
+    git branch $branchName | out-host
     
-    mkdir "../$branchName" -force
-    . $git worktree add "..\$branchName" $branchName | out-host
+    git worktree add "../$branchName" $branchName | out-host
     $succeeded = $?
-
     if (-not $succeeded) {
         throw ("Add-GitBranch: Work tree creation failed, to long paths? ")
     }
