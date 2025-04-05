@@ -226,7 +226,7 @@ function Add-GitBranch {
     # Create the new branch folder from source branch
     
     push-location $sourceName
-    # powershell is unable to execute . $git normally here
+    # cygwin git unable to create workstrees. oh my.
     git branch $branchName | out-host
     
     git worktree add "../$branchName" $branchName | out-host
@@ -288,7 +288,7 @@ function Compare-Files {
     $fullPath2 = (Resolve-Path $File2).Path
     
     # Use git diff with -w to ignore all whitespace differences (including BOMs)
-    $result = . $git diff --no-index --exit-code -w $fullPath1 $fullPath2 2>&1
+    $result = & $git diff --no-index --exit-code -w $fullPath1 $fullPath2 2>&1
     
     # Git returns exit code 0 if files are identical, 1 if different
     # Return $true if files are the same (ignoring BOMs)
@@ -354,7 +354,7 @@ function Get-SourceItem {
                 $tryHash = $branchHashTracker["$($Source.BranchName)-$i"]
             
                 # Check if file is changed and part of this commit
-                $lastFoundFile = . $git show --name-only $tryHash 2>&1 | ? { $_ -ieq "$gitLocalName" }
+                $lastFoundFile = & $git show --name-only $tryHash 2>&1 | ? { $_ -ieq "$gitLocalName" }
                 if ($lastFoundFile -ne $null ) {
                     $lastFoundIn=$i
                     # Break on first hit
@@ -494,7 +494,7 @@ if (-not $tfAssemblyFound) {
 
 
 
-$gitVersion = . $git --version
+$gitVersion = & $git --version
 Write-Host "Git version: $gitVersion" -ForegroundColor Green
 
 
@@ -577,25 +577,25 @@ Write-Host "Found project $projectPath"
 
 $env:GIT_CONFIG_GLOBAL = Join-Path -path (pwd) -childpath ".gitconfig"
 # Default Git settings
-. $git config --global user.email "tfs@git"
-. $git config --global user.name "TFS migration"
+& $git config --global user.email "tfs@git"
+& $git config --global user.name "TFS migration"
 
-. $git config --global core.autocrlf false
-. $git config --global core.longpaths true
+& $git config --global core.autocrlf false
+& $git config --global core.longpaths true
 # Old TFS checkins are case-insensitive, so we need to ignore case.
-. $git config --global core.ignorecase true
+& $git config --global core.ignorecase true
 
 # Disable special unicode file name treatments
-. $git config --global core.quotepath false
+& $git config --global core.quotepath false
 
-. $git config --global --add safe.directory '*'
+& $git config --global --add safe.directory '*'
 
 # Create the first main branch folder and initialize Git
 $d=mkdir $projectBranch
 push-location $projectBranch
-. $git init -b $projectBranch
+& $git init -b $projectBranch
 
-. $git commit -m "init" --allow-empty
+& $git commit -m "init" --allow-empty
 
 pop-location
 
@@ -846,13 +846,13 @@ foreach ($cs in $sortedHistory) {
                           
                             # Enter source branch for early commit
                             push-location $sourceBranchName
-                            . $git add -A 2>&1 | Out-Host
+                            & $git add -A 2>&1 | Out-Host
                             $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
 
                             $originalPreference = $ErrorActionPreference
                             $ErrorActionPreference = 'Continue'
-                            . $git commit -m $commitMessage --allow-empty 2>&1 | Out-Host
-                            $sourcehash = . $git rev-parse HEAD
+                            & $git commit -m $commitMessage --allow-empty 2>&1 | Out-Host
+                            $sourcehash = & $git rev-parse HEAD
                             $ErrorActionPreference = $originalPreference
 
                             $branchHashTracker["$sourceBranchName-$changesetId"] = $sourcehash
@@ -893,7 +893,7 @@ foreach ($cs in $sortedHistory) {
                     # Source has to exist
                     if ($sourcehash -ne $null -and (Test-Path -path $sourceRelativePath)) {
                         # If file exists in target branch, we need to revert it back to original state
-                        $backupHead = . $git rev-parse HEAD  
+                        $backupHead = & $git rev-parse HEAD  
                     }
                     
                     
@@ -904,14 +904,14 @@ foreach ($cs in $sortedHistory) {
 
                         # We need to flip this and manually find the appropiate case for git to be able to find the items.
                         $flipped=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
-                        $sourceRelativePath = . $git show --name-only $sourcehash 2>&1 | ? { $_ -ieq "$flipped" }
+                        $sourceRelativePath = & $git show --name-only $sourcehash 2>&1 | ? { $_ -ieq "$flipped" }
                         #$sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip path seps back
 
                         Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
 
                         $originalPreference = $ErrorActionPreference
                         $ErrorActionPreference = 'Continue'
-                        $out=. $git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
+                        $out=& $git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
                         $ErrorActionPreference = $originalPreference
 
                         # We need to flip this back for this to work
@@ -920,7 +920,7 @@ foreach ($cs in $sortedHistory) {
                         if ($out -is [System.Management.Automation.ErrorRecord]) {
 
                             write-host ($out |convertto-json)
-                            $status = . $git show --name-only $sourcehash 2>&1
+                            $status = & $git show --name-only $sourcehash 2>&1
                             
                             Write-verbose ($changeItem | convertto-json)
                             Write-Verbose "Something whent wrong with git checkout [$sourcehash] $sourceRelativePath"
@@ -960,7 +960,7 @@ foreach ($cs in $sortedHistory) {
                         $relativePath = $relativePath.Replace("\","/")
 
                         Write-Verbose "Renaming intermediate native $sourceRelativePath to target $relativePath"
-                        $out=. $git mv -f "$sourceRelativePath" "$relativePath"  2>&1 
+                        $out=& $git mv -f "$sourceRelativePath" "$relativePath"  2>&1 
 
                         Write-Host ($out | convertto-json)
                         
@@ -971,7 +971,7 @@ foreach ($cs in $sortedHistory) {
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath"
                             # Revert the original sourcerelativePath
-                            $out=. $git checkout -f $backupHead -- "$sourceRelativePath" 2>&1
+                            $out=& $git checkout -f $backupHead -- "$sourceRelativePath" 2>&1
                             if ($out -is [System.Management.Automation.ErrorRecord]) {
                                 Write-Verbose "git checkout failed $backupHead $sourceRelativePath"
                                 throw $out
@@ -1033,7 +1033,7 @@ foreach ($cs in $sortedHistory) {
                     # Flip to linux
                     $relativePath = $relativePath.Replace("\","/").Trim()
                     # Remove the file or directory
-                    $out=. $git add "$relativePath" 2>&1
+                    $out=& $git add "$relativePath" 2>&1
                     # Flip to windows
                     $relativePath = $relativePath.Replace("/","\")
 
@@ -1076,7 +1076,7 @@ foreach ($cs in $sortedHistory) {
                 # Flip to linux
                 $relativePath = $relativePath.Replace("\","/").Trim()
                 # Remove the file or directory
-                $out=. $git rm -f "$relativePath" 2>&1
+                $out=& $git rm -f "$relativePath" 2>&1
                 # Flip to windows
                 $relativePath = $relativePath.Replace("/","\")
 
@@ -1184,7 +1184,7 @@ foreach ($cs in $sortedHistory) {
             push-location $branch
             
             # Stage all changes
-            . $git add -A 2>&1 | Out-Host
+            & $git add -A 2>&1 | Out-Host
             
             # Prepare commit message
             $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
@@ -1194,8 +1194,8 @@ foreach ($cs in $sortedHistory) {
             $ErrorActionPreference = 'Continue'
 
                     
-            . $git commit -m $commitMessage --allow-empty 2>&1 | Out-Host
-            $hash = . $git rev-parse HEAD  
+            & $git commit -m $commitMessage --allow-empty 2>&1 | Out-Host
+            $hash = & $git rev-parse HEAD  
             $ErrorActionPreference  = $originalPreference
 
 
@@ -1222,7 +1222,7 @@ foreach ($cs in $sortedHistory) {
     if ($gitGCCounter -gt 10) {
         $gitGCCounter = 0
         Write-Verbose "Performing git garbage collection, every 20'th commit"
-        . $git gc --quiet
+        & $git gc --quiet
     }
 
 
