@@ -231,7 +231,7 @@ function Add-GitBranch {
     dir | out-host
     . $git branch $branchName
     . $git -v
-    . $git worktree add "../$branchName" $branchName
+    . $git worktree add "..\$branchName" $branchName
     $succeeded = $?
     dir | out-host
     if (-not $succeeded) {
