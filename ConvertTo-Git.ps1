@@ -224,16 +224,15 @@ function Add-GitBranch {
     }
 
     # Create the new branch folder from source branch
-    write-host (pwd)
-   
+    
     push-location $sourceName
-    write-host (pwd)
-    dir | out-host
-    . $git branch $branchName
-    . $git -v
-    . $git worktree add "..\$branchName" $branchName
+
+    . $git branch $branchName | out-host
+    
+    mkdir "../$branchName" -force
+    . $git worktree add "..\$branchName" $branchName | out-host
     $succeeded = $?
-    dir | out-host
+
     if (-not $succeeded) {
         throw ("Add-GitBranch: Work tree creation failed, to long paths? ")
     }
