@@ -226,7 +226,7 @@ function Add-GitBranch {
     # Create the new branch folder from source branch
     
     push-location $sourceName
-
+    # powershell is unable to execute . $git normamly here
     git branch $branchName | out-host
     
     git worktree add "../$branchName" $branchName | out-host
