@@ -1032,7 +1032,7 @@ foreach ($cs in $sortedHistory) {
 
                     # Flip to linux
                     $relativePath = $relativePath.Replace("\","/").Trim()
-                    # Remove the file or directory
+                    # Remove the file or directory  - Is this strictly required ?
                     $out=& $git add "$relativePath" 2>&1
                     # Flip to windows
                     $relativePath = $relativePath.Replace("/","\")
