@@ -1182,6 +1182,9 @@ foreach ($cs in $sortedHistory) {
             push-location $branch
             
             # Stage all changes
+            & $git status 2>&1 | Write-Host
+
+            # Stage all changes
             & $git add -A 2>&1 | Write-Host
             
             # Prepare commit message
