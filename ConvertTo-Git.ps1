@@ -216,9 +216,9 @@ function Add-GitBranch {
     
     push-location $sourceName
     # cygwin git unable to create workstrees. oh my.
-    git branch $branchName | out-host
+    git branch $branchName | write-host
     
-    git worktree add "../$branchName" $branchName | out-host
+    git worktree add "../$branchName" $branchName | write-host
     $succeeded = $?
     if (-not $succeeded) {
         throw ("Add-GitBranch: Work tree creation failed, to long paths? ")
@@ -842,12 +842,14 @@ foreach ($cs in $sortedHistory) {
                           
                             # Enter source branch for early commit
                             push-location $sourceBranchName
-                            & $git add -A 2>&1 | Out-Host
+                            & $git status 2>&1 | Write-Host
+
+                            & $git add -A 2>&1 | Write-Host
                             $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
 
                             $originalPreference = $ErrorActionPreference
                             $ErrorActionPreference = 'Continue'
-                            & $git commit -m $commitMessage --allow-empty 2>&1 | Out-Host
+                            & $git commit -m $commitMessage --allow-empty 2>&1 | Write-Host
                             $sourcehash = & $git rev-parse HEAD
                             $ErrorActionPreference = $originalPreference
 
@@ -1180,7 +1182,7 @@ foreach ($cs in $sortedHistory) {
             push-location $branch
             
             # Stage all changes
-            & $git add -A 2>&1 | Out-Host
+            & $git add -A 2>&1 | Write-Host
             
             # Prepare commit message
             $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
@@ -1190,7 +1192,7 @@ foreach ($cs in $sortedHistory) {
             $ErrorActionPreference = 'Continue'
 
                     
-            & $git commit -m $commitMessage --allow-empty 2>&1 | Out-Host
+            & $git commit -m $commitMessage --allow-empty 2>&1 | Write-Host
             $hash = & $git rev-parse HEAD  
             $ErrorActionPreference  = $originalPreference
 
