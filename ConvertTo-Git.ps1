@@ -98,23 +98,12 @@
 .NOTES
     File Name      : ConvertTo-Git.ps1
     Author         : Amund N. Letrud (Tryll)
-    Prerequisite   : 
-    - PowerShell 5.1 or later
-    - Visual Studio with Team Explorer (2019 or 2022)
-    - Git command-line tools
-    - Appropriate permissions in TFS/Azure DevOps
     
     Performance:
     - For large repositories, this script may take several hours to run
     - Progress is displayed with percentage complete
     - Compatible with Azure DevOps pipeline tasks
     
-    Security:
-    - Credentials are handled securely using SecureString objects
-    - Passwords are cleared from memory after use
-    - Compatible with Azure DevOps pipeline secret variables
-    - PAT authentication is recommended for modern Azure DevOps environments
-
 .LINK
     https://github.com/Tryll/TeamFoundationServer
 #>
@@ -352,13 +341,19 @@ function Get-SourceItem {
             if ($branchHashTracker.ContainsKey("$($Source.BranchName)-$i")) {
                 # Fetch hash from previous commit
                 $tryHash = $branchHashTracker["$($Source.BranchName)-$i"]
+
+                Write-Verbose "Get-SourceItem: Looking in $($Source.BranchName)-$i : $tryHash"
             
                 # Check if file is changed and part of this commit
-                $lastFoundFile = & $git show --name-only $tryHash 2>&1 | ? { $_ -ieq "$gitLocalName" }
+                $lastFoundFile = & $git show --name-only $tryHash 2>&1 | ? { $_.Replace("\","/") -ieq "$gitLocalName" }
                 if ($lastFoundFile -ne $null ) {
                     $lastFoundIn=$i
                     # Break on first hit
                     break
+                } else {
+                    Write-Verbose "Did not find $gitLocalName in this:"
+                    & $git show --name-only $tryHash 2>&1  | write-host
+                    
                 }
             }
         }
