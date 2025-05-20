@@ -1182,11 +1182,13 @@ foreach ($cs in $sortedHistory) {
             push-location $branch
             
             # Stage all changes
-            & $git status 2>&1 | Write-Host
+            $o = & $git status 2>&1
+            write-verbose $o
 
             # Stage all changes
-            & $git add -A 2>&1 | Write-Host
-            
+            $o = & $git add -A 2>&1 | Write-Host
+            write-verbose $o
+
             # Prepare commit message
             $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
             
