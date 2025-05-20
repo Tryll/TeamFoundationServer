@@ -345,7 +345,7 @@ function Get-SourceItem {
                 Write-Verbose "Get-SourceItem: Looking in $($Source.BranchName)-$i : $tryHash"
             
                 # Check if file is changed and part of this commit
-                $lastFoundFile = & $git show --name-only $tryHash 2>&1 | findstr /i "$gitLocalName"
+                $lastFoundFile = & $git show --name-only $tryHash 2>&1 | findstr /i "$gitLocalName$"
                 if ($lastFoundFile -ne $null ) {
                     $lastFoundIn=$i
                     # Break on first hit
@@ -358,6 +358,7 @@ function Get-SourceItem {
             }
         }
         if ($lastFoundIn -ne 0) {
+            # using lastFoundFile to match case:
             Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" last changed in TFS-$lastFoundIn"
 
             $Source.ChangesetId = $lastFoundIn
@@ -899,7 +900,7 @@ foreach ($cs in $sortedHistory) {
 
                         # We need to flip this and manually find the appropiate case for git to be able to find the items.
                         $flipped=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
-                        $sourceRelativePath = & $git show --name-only $sourcehash 2>&1 | findstr /i "$flipped"
+                        $sourceRelativePath = & $git show --name-only $sourcehash 2>&1 | findstr /i "$flipped$"
                         #$sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip path seps back
 
                         Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
