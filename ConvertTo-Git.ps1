@@ -946,7 +946,14 @@ foreach ($cs in $sortedHistory) {
                     # CHECKOUT RENAME: Source and Destination is not the same : (GIT PROBLEMS:)
                     if ($sourceRelativePath -ne $relativePath) {
 
-                   
+                        # If target allready exists we need to delete it to avoid having git indexing problems, we are overwriting
+                        if (test-path -path $relativePath -type file) {
+                            Write-Verbose "Removing the original file to ensure index is removed (handling directory case changes/problems)"
+                            & $git rm -f $relativePath
+                        }
+
+                        # Continue with normal rename
+                        
                         Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
 
                         # Ensure folder structure exists, and remove the target file
