@@ -949,7 +949,8 @@ foreach ($cs in $sortedHistory) {
                         # If target allready exists we need to delete it to avoid having git indexing problems, we are overwriting
                         if (Test-Path -path $relativePath -pathtype Leaf) {
                             Write-Verbose "Removing the original file to ensure index is removed (handling directory case changes/problems)"
-                            & $git rm -f $relativePath
+                            $gitRelativePath = $relativePath.Replace("\","/")
+                            & $git rm -f $gitRelativePath
                         }
 
                         # Continue with normal rename
