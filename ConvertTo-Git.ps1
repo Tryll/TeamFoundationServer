@@ -462,6 +462,7 @@ function Get-RealCasedPath {
     if ($result -gt 0) {
         return $buffer.ToString(0, $result)
     }
+    $buffer = $null
     return $Path  # fallback to original if API call fails
 }
 
