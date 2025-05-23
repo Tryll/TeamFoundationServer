@@ -456,7 +456,7 @@ public class PathAPI {
 function Get-RealCasedPath {
     param([string]$Path)
     
-    $buffer = [System.Text.StringBuilder]::new(1024)
+    $buffer = [System.Text.StringBuilder]::new(2048)
     $result = [PathAPI]::GetLongPathName($Path, $buffer,  $buffer.Capacity)
     
     if ($result -gt 0) {
@@ -1065,6 +1065,7 @@ foreach ($cs in $sortedHistory) {
                     # Looks like we may have to add the correct file path for the file here for git to not get index problems.
                     # Ie we need to resolve the actuall path
                     $realRealtivePath = Get-RealCasedPath -path $target.FullName
+                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - from $($target.FullName)"
                     $realRelativePath = $realRealtivePath.SubString($realRelativePath.Length - $relativePath.Length).Replace("\","/")
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path, for git add"
                     
