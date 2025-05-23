@@ -215,10 +215,14 @@ function Add-GitBranch {
     # Create the new branch folder from source branch
     
     push-location $sourceName
+
     # cygwin git unable to create workstrees. oh my.
-    git branch $branchName | write-host
+    # git branch $branchName | write-host
     
-    git worktree add "../$branchName" $branchName | write-host
+    # Creates orphan branches as default, from sourceName which is always main.
+    # If this logic works, we can reduce complexity in this function.
+    # Automatically creates branch with name "branchName"
+    git worktree add --orphan "../$branchName" | write-host
     $succeeded = $?
     if (-not $succeeded) {
         throw ("Add-GitBranch: Work tree creation failed, to long paths? ")
@@ -600,7 +604,6 @@ if ($project -eq $null) {
     exit 1
 }
 $projectPath=$project.ServerItem
-$projectBranch = "main"
 Write-Host "Found project $projectPath"
 
 $env:GIT_CONFIG_GLOBAL = Join-Path -path (pwd) -childpath ".gitconfig"
@@ -619,10 +622,10 @@ $env:GIT_CONFIG_GLOBAL = Join-Path -path (pwd) -childpath ".gitconfig"
 & $git config --global --add safe.directory '*'
 
 # Create the first main branch folder and initialize Git
+$projectBranch = "main"
 $d=mkdir $projectBranch
 push-location $projectBranch
 & $git init -b $projectBranch
-
 & $git commit -m "init" --allow-empty
 
 pop-location
@@ -1221,6 +1224,7 @@ foreach ($cs in $sortedHistory) {
         foreach($branch in $branchChanges.Keys) {
             push-location $branch
             
+
             # Stage all changes
             $o = & $git status 2>&1
             write-verbose ($o -join "`n")
