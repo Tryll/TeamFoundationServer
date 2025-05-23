@@ -1065,11 +1065,13 @@ foreach ($cs in $sortedHistory) {
 
                     # Looks like we may have to add the correct file path for the file here for git to not get index problems.
                     # Ie we need to resolve the actuall path
-                    $realRelativePath = Get-RealCasedPath -path $target.FullName
-                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - from $($target.FullName)"
-                    $realRelativePath = $realRealtivePath.SubString($realRelativePath.Length - $relativePath.Length).Replace("\","/")
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path, for git add"
-                    
+                    $fullName = $target.FullName.Trim()
+                    $realFullName = Get-RealCasedPath -path $fullName
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realFullName from $fullName"
+                    $realRelativePath = $realFullName.SubString($realFullName.Length - $relativePath.Trim().Length)
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path"
+                    $realRelativePath = $realRelativePath.Replace("\","/")
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real git  relative path"
                     # Remove the file or directory  - Is this strictly required ?
                     $out=& $git add "$realRelativePath" 2>&1
     
