@@ -1065,7 +1065,7 @@ foreach ($cs in $sortedHistory) {
 
                     # Looks like we may have to add the correct file path for the file here for git to not get index problems.
                     # Ie we need to resolve the actuall path
-                    $realRealtivePath = Get-RealCasedPath -path $target.FullName
+                    $realRelativePath = Get-RealCasedPath -path $target.FullName
                      Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - from $($target.FullName)"
                     $realRelativePath = $realRealtivePath.SubString($realRelativePath.Length - $relativePath.Length).Replace("\","/")
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path, for git add"
