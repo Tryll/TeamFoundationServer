@@ -434,6 +434,37 @@ function Sort-TfsChangeItems {
     return $sorted
 }
 
+
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public class PathAPI {
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    [return: MarshalAs(UnmanagedType.U4)]
+    public static extern int GetLongPathName(
+        [MarshalAs(UnmanagedType.LPTStr)]
+        string lpszShortPath,
+        [MarshalAs(UnmanagedType.LPTStr)]
+        StringBuilder lpszLongPath,
+        [MarshalAs(UnmanagedType.U4)]
+        int cchBuffer);
+}
+"@
+
+function Get-RealCasedPath {
+    param([string]$Path)
+    
+    $buffer = [System.Text.StringBuilder]::new(1024)
+    $result = [PathAPI]::GetLongPathName($Path, $buffer,  $buffer.Capacity)
+    
+    if ($result -gt 0) {
+        return $buffer.ToString(0, $result)
+    }
+    return $Path  # fallback to original if API call fails
+}
+
 #endregion
 
 
@@ -946,15 +977,8 @@ foreach ($cs in $sortedHistory) {
                     # CHECKOUT RENAME: Source and Destination is not the same : (GIT PROBLEMS:)
                     if ($sourceRelativePath -ne $relativePath) {
 
-                        # If target allready exists we need to delete it to avoid having git indexing problems, we are overwriting
-                        if (Test-Path -path $relativePath -pathtype Leaf) {
-                            Write-Verbose "Removing the original file to ensure index is removed (handling directory case changes/problems)"
-                            $gitRelativePath = $relativePath.Replace("\","/")
-                            & $git rm -f $gitRelativePath
-                        }
-
+                  
                         # Continue with normal rename
-                        
                         Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
 
                         # Ensure folder structure exists, and remove the target file
@@ -1036,13 +1060,17 @@ foreach ($cs in $sortedHistory) {
                         throw "stop here"
                     }
 
-                    # Flip to linux
-                    $relativePath = $relativePath.Replace("\","/").Trim()
-                    # Remove the file or directory  - Is this strictly required ?
-                    $out=& $git add "$relativePath" 2>&1
-                    # Flip to windows
-                    $relativePath = $relativePath.Replace("/","\")
+                    # Flip to linux and notify git
 
+                    # Looks like we may have to add the correct file path for the file here for git to not get index problems.
+                    # Ie we need to resolve the actuall path
+                    $realRealtivePath = Get-RealCasedPath -path $target.FullName
+                    $realRelativePath = $realRealtivePath.SubString($realRelativePath.Length - $relativePath.Length).Replace("\","/")
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path, for git add"
+                    
+                    # Remove the file or directory  - Is this strictly required ?
+                    $out=& $git add "$realRelativePath" 2>&1
+    
                     if ($out -is [System.Management.Automation.ErrorRecord]) {
                         Write-Host ($out |convertto-json )
                         Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File download add failed" 
