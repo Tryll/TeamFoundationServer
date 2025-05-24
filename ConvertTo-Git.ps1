@@ -788,8 +788,6 @@ foreach ($cs in $sortedHistory) {
                     # Lets ignore folders in merge/branch, as files are processed subsequently and git handles folders better/to good
                     if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
                         
-                        
-                        $source = Get-SourceItem $change $changesetId
                         Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath $($source.RelativePath) - Merging/Rename/Branch - ignoring container operations" -ForegroundColor Gray
                         $qualityCheckNotApplicable = $true
                         # Next item!
