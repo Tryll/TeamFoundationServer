@@ -1037,8 +1037,8 @@ foreach ($cs in $sortedHistory) {
                     }
 
                     # Flip to linux and notify git
-                    $gitRelativePath = $relativePath.Replace("\","/")
-                    $out=& $git add "$gitRelaitvePath" 2>&1
+                    $gitRelativePath = $relativePath.Replace("\","/").Trim()
+                    $out=& $git add "$gitRelativePath" 2>&1
     
                     if ($out -is [System.Management.Automation.ErrorRecord]) {
                         Write-Host ($out |convertto-json )
