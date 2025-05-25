@@ -439,6 +439,37 @@ function Sort-TfsChangeItems {
 }
 
 
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public class PathAPI {
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    [return: MarshalAs(UnmanagedType.U4)]
+    public static extern int GetLongPathName(
+        [MarshalAs(UnmanagedType.LPTStr)]
+        string lpszShortPath,
+        [MarshalAs(UnmanagedType.LPTStr)]
+        StringBuilder lpszLongPath,
+        [MarshalAs(UnmanagedType.U4)]
+        int cchBuffer);
+}
+"@
+
+function Get-RealCasedPath {
+    param([string]$Path)
+    
+    $buffer = [System.Text.StringBuilder]::new(2048)
+    $result = [PathAPI]::GetLongPathName($Path, $buffer,  $buffer.Capacity)
+    
+    if ($result -gt 0) {
+        return $buffer.ToString(0, $result)
+    }
+    $buffer = $null
+    return $Path  # fallback to original if API call fails
+}
+
 #endregion
 
 
@@ -787,8 +818,7 @@ foreach ($cs in $sortedHistory) {
                 
                     # Lets ignore folders in merge/branch, as files are processed subsequently and git handles folders better/to good
                     if ($itemType -eq [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::Folder) {
-                        
-                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath $($source.RelativePath) - Merging/Rename/Branch - ignoring container operations" -ForegroundColor Gray
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging/Rename/Branch - ignoring container operations" -ForegroundColor Gray
                         $qualityCheckNotApplicable = $true
                         # Next item!
                         continue
@@ -1035,8 +1065,18 @@ foreach ($cs in $sortedHistory) {
                     }
 
                     # Flip to linux and notify git
-                    $gitRelativePath = $relativePath.Replace("\","/").Trim()
-                    $out=& $git add "$gitRelativePath" 2>&1
+
+                    # Looks like we may have to add the correct file path for the file here for git to not get index problems.
+                    # Ie we need to resolve the actuall path
+                    $fullName = $target.FullName.Trim()
+                    $realFullName = Get-RealCasedPath -path $fullName
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realFullName from $fullName"
+                    $realRelativePath = $realFullName.SubString($realFullName.Length - $relativePath.Trim().Length)
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path"
+                    $realRelativePath = $realRelativePath.Replace("\","/")
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real git  relative path"
+                    # Remove the file or directory  - Is this strictly required ?
+                    $out=& $git add "$realRelativePath" 2>&1
     
                     if ($out -is [System.Management.Automation.ErrorRecord]) {
                         Write-Host ($out |convertto-json )
@@ -1268,4 +1308,3 @@ pop-location
         Stop-Transcript  -ErrorAction SilentlyContinue
     }
 }
-
