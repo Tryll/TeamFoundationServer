@@ -1268,8 +1268,10 @@ foreach ($cs in $sortedHistory) {
    
     if ($gitGCCounter -gt 10) {
         $gitGCCounter = 0
+        push-location $projectBranch
         Write-Verbose "Performing git garbage collection, every 20'th commit"
         & $git gc --quiet
+        pop-location
     }
 
 
