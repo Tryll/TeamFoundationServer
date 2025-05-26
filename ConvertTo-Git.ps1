@@ -623,12 +623,52 @@ $env:GIT_CONFIG_GLOBAL = Join-Path -path (pwd) -childpath ".gitconfig"
 
 # Create the first main branch folder and initialize Git
 $projectBranch = "main"
-$d=mkdir $projectBranch
-push-location $projectBranch
-& $git init -b $projectBranch
-& $git commit -m "init" --allow-empty
 
-pop-location
+
+
+# Initialize State
+
+# Track all branches, with default branch first:
+$branches = @{
+    # The first and default branch and way to catch all floating TFS folders
+    "$projectPath" = @{
+        Name = $PrimaryBranchName
+        TfsPath = "$projectPath" 
+        Rewrite = ""
+    }
+}
+
+$processedChangesets = 0
+$processedItems = 0
+$gitGCCounter = 0
+$branchHashTracker = @{}
+if ($FromChangesetId -gt 0) {
+    if (-not (Test-Path "laststate.json")) {
+        throw "Unable to continue from previous run, laststate.json missing"
+    }
+
+    $state = get-content laststate.json  | convertfrom-json
+    $processedChangesets = $state.processedChangesets
+    $processedItems = $state.processedItems
+    $gitGCCounter = $state.gitGCCounter
+    $branchHashTracker = $state.branchHashTracker
+    $branches  = $state.branches
+}
+
+
+# New Repository or Continue:
+if (-not (Test-path (join-path $projectBranch ".git"))) {
+    Write-Host "Creating repository $projectBranch"
+    $d = New-Item -ItemType Directory -Path $projectBranch -Force
+    Push-Location $projectBranch
+    & $git init -b $projectBranch
+    & $git commit -m "init" --allow-empty
+    Pop-Location
+
+} else {
+  Write-Host "Using existing repository $projectBranch"
+
+}
 
 
 $longPathsValue = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -ErrorAction SilentlyContinue
@@ -638,17 +678,7 @@ if ($null -eq $longPathsValue -or $longPathsValue.LongPathsEnabled -ne 1) {
     Write-Host "Confirmed Long Paths is enabled for Windows"
 }
 
-# Track all branches, with default branch first:
-$branches = @{
-    # The first and default branch and  way to catch all floating TFS folders
-    "$projectPath" = @{
-        Name = $PrimaryBranchName # The name of the branch in TFS and GIT
-        TfsPath = "$projectPath" 
-        # The tfspath will be renamed to this, prefixed with branchName for folder
-        Rewrite = ""
-    }
 
-}
 # track changes to branches, will git commit to each branch
 $branchChanges = @{}
 
@@ -679,12 +709,8 @@ $sortedHistory = $history | Sort-Object CreationDate
 $totalChangesets = $sortedHistory.Count
 Write-Host "Found $totalChangesets changesets - processing from oldest to newest" -ForegroundColor Green
 
-# Initialize counters
-$processedChangesets = 0
-$processedItems = 0
 
-$gitGCCounter =0
-$branchHashTracker = @{}
+try {   # Finally block to save state.
 
 # Process each changeset
 foreach ($cs in $sortedHistory) {
@@ -1279,6 +1305,18 @@ foreach ($cs in $sortedHistory) {
     Write-Host ""
     # reset and loop
     $branchChanges = @{}
+}
+} finally { 
+    
+    @{
+        processedChangesets = $processedChangesets
+        processedItems = $processedItems
+        gitGCCounter = $gitGCCounter
+        branchHashTracker = $branchHashTracker
+        branches = $branches
+    } | convertto-json | out-file (join-path $targetRoot "laststate.json")
+
+    write-host "state file saved"
 }
 
 # Clear the progress bar
