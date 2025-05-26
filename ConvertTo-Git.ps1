@@ -540,8 +540,9 @@ if (!(Test-Path $OutputPath)) {
 
 
 # Initialize Git repository
-Write-Host "Initializing Git repository in $OutputPath..." -ForegroundColor Cyan
+Write-Host "Initializing target root $OutputPath..." -ForegroundColor Cyan
 Push-Location $OutputPath
+$targetRoot = (pwd).path
 
 
 # Connect to TFS with appropriate authentication
