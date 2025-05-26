@@ -648,7 +648,7 @@ if ($FromChangesetId -gt 0) {
         throw "Unable to continue from previous run, laststate.json missing"
     }
 
-    $state = get-content laststate.json  | convertfrom-json
+    $state = get-content laststate.json  | convertfrom-json  -AsHashtable
     $processedChangesets = $state.processedChangesets
     $processedItems = $state.processedItems
     $gitGCCounter = $state.gitGCCounter
