@@ -862,15 +862,6 @@ foreach ($cs in $sortedHistory) {
                         continue
                     }
 
-                    # "Merge" operations on TFS without Edit or Branch is really nothing, and can be ignored - from the perspective of GIT.
-                    if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
-                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging without Edit/Branch is a NO-OP in GIT" -ForegroundColor Gray
-                        # There is nothing to check
-                        $qualityCheckNotApplicable = $true
-
-                        # Next item!
-                        continue
-                    }
 
                      # "Delete" + "Merge" + "SourceRename" => a file was renamed (and the source file "deleted") originally, there is nothing to track here as there is nothing to do.
                      if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -and 
@@ -1273,7 +1264,7 @@ foreach ($cs in $sortedHistory) {
 
             # Prepare commit message, handle any type of comments and special chars
             $commentTmpFile = [System.IO.Path]::GetTempFileName()
-            "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]" | Out-File -FilePath $commentTmpFile -Encoding UTF8 -NoNewline
+            "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]" | Out-File -FilePath $commentTmpFile -Encoding ASCII -NoNewline
             
             # Make the commit
             $originalPreference = $ErrorActionPreference
