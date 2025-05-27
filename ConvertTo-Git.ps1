@@ -331,11 +331,11 @@ function Get-SourceItem {
 
     # Scan current first, as this will not be possible to git history scan if in current - Check if file is in current folder structure (could use git status file here)
     # This is what TFS does, but it should really have picked from previous.
-    if ($Source.ChangesetId -eq $changesetId -and $Source.BranchName -eq $currentBranchName -and Test-Path $Source.RelativePath) {
+    if ($Source.ChangesetId -eq $changesetId -and $Source.BranchName -eq $currentBranchName -and (Test-Path $Source.RelativePath)) {
         Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] $($Source.RelativePath) found in current path"
         $Source.ChangesetId = $changesetId
         $Source.Hash = $null
-        return
+        return $Source
     }
 
     if ($Source.ChangesetId -ne $changesetId -and $Source.Hash -eq $null) {
@@ -1271,8 +1271,9 @@ foreach ($cs in $sortedHistory) {
             $o = & $git add -A 2>&1
             write-verbose ($o -join "`n")
 
-            # Prepare commit message
-            $commitMessage = "$($changeset.Comment.Replace("`"","").Replace("`'","") ) [TFS-$($changeset.ChangesetId)]"
+            # Prepare commit message, handle any type of comments and special chars
+            $commentTmpFile = [System.IO.Path]::GetTempFileName()
+            "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]" | Out-File -FilePath $commentTmpFile -Encoding UTF8 -NoNewline
             
             # Make the commit
             $originalPreference = $ErrorActionPreference
@@ -1282,10 +1283,11 @@ foreach ($cs in $sortedHistory) {
             $currentHash = & $git rev-parse HEAD 
             
             # Handle special  commit message chars:
-            & $git commit -m $commitMessage --allow-empty 2>&1 | Write-Host
+            & $git commit -F $commentTmpFile --allow-empty 2>&1 | Write-Host
 
             $hash = & $git rev-parse HEAD  
             $ErrorActionPreference  = $originalPreference
+            Remove-Item $commentTmpFile
 
             if ($hash -eq $currentHash) {
                 throw "Commit failed, stopping for review"
