@@ -290,7 +290,7 @@ function Compare-Files {
 
 
 function Get-SourceItem {
-    param($change, $changesetId)
+    param($change, $changesetId, $currentBranchName)
 
     if ($change.MergeSources -eq $null -or $change.MergeSources.Count -eq 0) {
         throw "Get-SourceItem: change item has no sources - $changesetId $($change.Item.ServerItem)"
@@ -324,14 +324,25 @@ function Get-SourceItem {
     #    $Source.Branch.TfsPath+="/main"
     #}
 
+    # Ensure we have Window format paths
     $Source.RelativePath = $Source.Path.Replace($Source.Branch.TfsPath, $Source.Branch.Rewrite).TrimStart('/').Replace('/', '\')
 
     Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] with rewrite '$($Source.Branch.Rewrite)' for $($Source.RelativePath)"
-  
+
+    # Scan current first, as this will not be possible to git history scan if in current - Check if file is in current folder structure (could use git status file here)
+    # This is what TFS does, but it should really have picked from previous.
+    if ($Source.ChangesetId -eq $changesetId -and $Source.BranchName -eq $currentBranchName -and Test-Path $Source.RelativePath) {
+        Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] $($Source.RelativePath) found in current path"
+        $Source.ChangesetId = $changesetId
+        $Source.Hash = $null
+        return
+    }
+
     if ($Source.ChangesetId -ne $changesetId -and $Source.Hash -eq $null) {
         Write-Verbose "Get-SourceItem: Source Hash cannot be null"
     }
 
+    # Scan in range if required
     if ($Source.ChangesetId -ne $Source.ChangesetIdFrom) {
         #Write-Verbose "Get-SourceItem: Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
         $lastFoundIn=0
@@ -877,7 +888,7 @@ foreach ($cs in $sortedHistory) {
 
 
                     # Get source item
-                    $source = Get-SourceItem $change $changesetId
+                    $source = Get-SourceItem $change $changesetId $branchName
                     $sourceBranchName = $source.BranchName
                     $sourceChangesetId = $source.ChangesetId
                     $sourcehash = $source.Hash
@@ -1261,16 +1272,18 @@ foreach ($cs in $sortedHistory) {
             write-verbose ($o -join "`n")
 
             # Prepare commit message
-            $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
+            $commitMessage = "$($changeset.Comment.Replace("`"","").Replace("`'","") ) [TFS-$($changeset.ChangesetId)]"
             
             # Make the commit
             $originalPreference = $ErrorActionPreference
             $ErrorActionPreference = 'Continue'
 
+            # Fetch current for validation
             $currentHash = & $git rev-parse HEAD 
             
             # Handle special  commit message chars:
-            & $git @('commit', '-m', $commitMessage, '--allow-empty') 2>&1 | Write-Host
+            & $git commit -m $commitMessage --allow-empty 2>&1 | Write-Host
+
             $hash = & $git rev-parse HEAD  
             $ErrorActionPreference  = $originalPreference
 
