@@ -1267,11 +1267,16 @@ foreach ($cs in $sortedHistory) {
             $originalPreference = $ErrorActionPreference
             $ErrorActionPreference = 'Continue'
 
-                    
-            & $git commit -m $commitMessage --allow-empty 2>&1 | Write-Host
+            $currentHash = & $git rev-parse HEAD 
+            
+            # Handle special  commit message chars:
+            & $git @('commit', '-m', $commitMessage, '--allow-empty') 2>&1 | Write-Host
             $hash = & $git rev-parse HEAD  
             $ErrorActionPreference  = $originalPreference
 
+            if ($hash -eq $currentHash) {
+                throw "Commit failed, stopping for review"
+            }
 
             $branchHashTracker["$branch-$changesetId"] =  $hash
             Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted" -ForegroundColor Gray
