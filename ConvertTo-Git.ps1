@@ -1076,6 +1076,7 @@ foreach ($cs in $sortedHistory) {
           # Add/Edit - Downloading:
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add -or 
                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -or 
+                $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -or # Stand alone (or with sourcerename in changeset) can have modified content...
                 $forceAddNoSource ) {
         
                 # Default Commit File action: Edit, Add, Branch without source and so on:
