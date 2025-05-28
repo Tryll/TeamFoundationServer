@@ -392,61 +392,75 @@ function Get-SourceItem {
     return $Source
 }
 
-<#
-.SYNOPSIS
-Sorts TFS change items to ensure Rename operations appear before their corresponding Add operations.
-
-.DESCRIPTION
-This function reorders an array of TFS change items by swapping positions of Rename and Add operations
-for the same file paths, ensuring that Rename operations are processed before Add operations.
-#>
 function Sort-TfsChangeItems {
     param (
         [Parameter(Mandatory=$true)]
         [array]$changes
     )
     
-    # Clone the array to avoid modifying the original
-    $sorted = $changes.Clone()
+    # Define operation precedence (lower number = higher priority)
+    $precedence = @{
+        [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete = 1
+        [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename = 2
+        [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add = 3
+        [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit = 4
+        [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge = 5
+    }
     
-    # Track Add files based on their path
+    # Sort by precedence, then by path depth (shallow to deep), then alphabetically
+    $sorted = $changes | Sort-Object -Property @(
+        # Primary sort: Operation precedence
+        @{
+            Expression = {
+                $change = $_
+                $minPrecedence = 999
+                foreach ($changeType in $precedence.Keys) {
+                    if ($change.ChangeType -band $changeType) {
+                        $minPrecedence = [Math]::Min($minPrecedence, $precedence[$changeType])
+                    }
+                }
+                return $minPrecedence
+            }
+        },
+        # Secondary sort: Path depth (folders before files)
+        @{
+            Expression = { ($_.Item.ServerItem -split '/').Count }
+        },
+        # Tertiary sort: Alphabetical by path
+        @{
+            Expression = { $_.Item.ServerItem }
+        }
+    )
+    
+    # Handle specific rename-before-add cases for the same path
+    $result = @()
     $addItems = @{}
-    $idx = 0
-
+    
     foreach ($change in $sorted) {
-
-        # Track adds for files:
         if (($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add) -and 
             ($change.Item.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File)) {
-            
-          #  Write-Verbose "Sort-TfsChangeItems tracking $($change.Item.ServerItem)"
-            $addItems[$change.Item.ServerItem] = $idx++
-            
-        }   
-
-        # Switch renames for files that match existing, so renames comes before adds
-        if (($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) -and 
-            ($change.Item.ItemType -band [Microsoft.TeamFoundation.VersionControl.Client.ItemType]::File) -and
-            $change.MergeSources.Count -gt 0 -and 
-            $addItems.ContainsKey($change.MergeSources[0].ServerItem)) {
-            
-        #    Write-Verbose "Sort-TfsChangeItems moving Rename before Add for $($change.MergeSources[0].ServerItem)"
-
-            # Get the original Add change
-            $origAddIdx = $addItems[$change.MergeSources[0].ServerItem]
-            $origAddChange = $sorted[$origAddIdx]
-            
-            # Swap positions (put Rename before Add)
-            $sorted[$origAddIdx] = $change
-            $sorted[$idx] = $origAddChange
-            
-            # Update the index in the tracking dictionary
-            $addItems[$change.MergeSources[0].ServerItem] = $idx
-        } 
+            $addItems[$change.Item.ServerItem] = $change
+        }
+        elseif (($change.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename) -and 
+                $change.MergeSources.Count -gt 0 -and 
+                $addItems.ContainsKey($change.MergeSources[0].ServerItem)) {
+            # Insert rename before the corresponding add
+            $result += $change
+            $result += $addItems[$change.MergeSources[0].ServerItem]
+            $addItems.Remove($change.MergeSources[0].ServerItem)
+            continue
+        }
         
+        # Add items that weren't part of rename pairs
+        if (-not ($addItems.ContainsValue($change))) {
+            $result += $change
+        }
     }
-
-    return $sorted
+    
+    # Add any remaining add operations
+    $result += $addItems.Values
+    
+    return $result
 }
 
 
