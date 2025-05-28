@@ -964,9 +964,24 @@ foreach ($cs in $sortedHistory) {
                     # CHECKOUT from hash, it that exists - else file is local to branch:
                     if ($sourcehash -ne $null -and $changeItem.DeletionId -eq 0) {
 
-                        # We need to flip this and manually find the appropiate case for git to be able to find the items.
+                        # Try to find correct file case from git commit:
                         $flipped=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
                         $sourceRelativePath = & $git show --name-only $sourcehash 2>&1 | ? { $_ -ieq "$flipped" }
+
+                        # The file was not found as part of the changeset, attempting to find from commit tree
+                        if ([string]::IsNullOrEmpty($sourceRelativePath)) {
+                            Write-Verbose "$flipped was not found in CHANGES for hash $sourcehash, checking if file exists in tree."
+                            
+                            # Try to get exact case from the commit tree
+                            $sourceRelativePath = & $git ls-tree -r --name-only $sourcehash 2>&1 | ? { $_ -ieq "$flipped" }
+                            
+                            if ([string]::IsNullOrEmpty($sourceRelativePath)) {
+                                Write-Verbose "$sourceRelativePath does not exist at hash $sourcehash."
+                                throw "File reference not found."
+                            }
+                        }
+
+
                         #$sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip path seps back
 
                         Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
