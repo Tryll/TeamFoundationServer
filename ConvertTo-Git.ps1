@@ -366,9 +366,8 @@ function Get-SourceItem {
                     # Break on first hit
                     break
                 } else {
-                    Write-Verbose "Did not find $gitLocalName in this:"
-                    & $git show --name-only $tryHash 2>&1  | write-host
-                    
+                    #Write-Verbose "Did not find $gitLocalName in this:"
+                    # & $git show --name-only $tryHash 2>&1  | write-host
                 }
             }
         }
@@ -973,12 +972,19 @@ foreach ($cs in $sortedHistory) {
 
 
                     # Takes current branch head, incase we need to revert a file
-                    $backupHead = $null
+                    $sourceHasBackup = $false
+
+                    $sourceTempPath = [System.IO.Path]::GetRandomFileName()
                     # Do not restore backup if move is in same changeset/branch/commit, the rename is rename
                     # Source has to exist
                     if ($sourcehash -ne $null -and (Test-Path -path $sourceRelativePath)) {
-                        # If file exists in target branch, we need to revert it back to original state
-                        $backupHead = & $git rev-parse HEAD  
+                        # If file exists in target branch, we take a backup before returning it
+            
+                        $flipped=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
+                        Write-Verbose "Taking backup of original source $sourceRelativePath to $sourceTempPath"
+                        $out=& $git mv -f "$flipped" "$sourceTempPath" 2>&1 
+                        Write-Host ($out | convertto-json)
+                        $sourceHasBackup = $true
                     }
                     
                     
@@ -1048,7 +1054,6 @@ foreach ($cs in $sortedHistory) {
                     # CHECKOUT RENAME: Source and Destination is not the same : (GIT PROBLEMS:)
                     if ($sourceRelativePath -ne $relativePath) {
 
-                  
                         # Continue with normal rename
                         Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
 
@@ -1057,27 +1062,25 @@ foreach ($cs in $sortedHistory) {
                         remove-item -path $relativePath -force -erroraction SilentlyContinue | Out-Null
 
                         # Flip to linux style
-                        $sourceRelativePath=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
+                        $sourceRelativePath=$sourceRelativePath.Replace("\","/")
                         $relativePath = $relativePath.Replace("\","/")
 
                         Write-Verbose "Renaming intermediate native $sourceRelativePath to target $relativePath"
                         $out=& $git mv -f "$sourceRelativePath" "$relativePath"  2>&1 
 
                         Write-Host ($out | convertto-json)
-                        
+             
+                        if ($sourceHasBackup) {
+                            # Revert the original sourcerelativePath
+                            
+                            Write-Verbose "Reverting backup $sourceTempPath to $sourceRelativePath"
+                            $out=& $git mv -f "$sourceTempPath" "$sourceRelativePath" 2>&1 
+                            Write-Host ($out | convertto-json)
+                        }
+
                         # Flip back to windows
                         $relativePath = $relativePath.Replace("/","\")
                         $sourceRelativePath = $sourceRelativePath.Replace("/","\") 
-             
-                        if ($backupHead -ne $null) {
-                            Write-Verbose "Reverting intermediate $sourceRelativePath"
-                            # Revert the original sourcerelativePath
-                            $out=& $git checkout -f $backupHead -- "$sourceRelativePath" 2>&1
-                            if ($out -is [System.Management.Automation.ErrorRecord]) {
-                                Write-Verbose "git checkout failed $backupHead $sourceRelativePath"
-                                throw $out
-                            }
-                        }
                     }
 
 
