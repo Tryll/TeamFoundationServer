@@ -1066,9 +1066,8 @@ foreach ($cs in $sortedHistory) {
                         Write-Host ($out | convertto-json)
                         
 
-                        
                         if ($backupHead -ne $null) {
-                            Write-Verbose "Reverting intermediate $sourceRelativePath"
+                            Write-Verbose "Reverting intermediate $sourceRelativePath from $backupHead"
                             # Revert the original sourcerelativePath
                             $out=& $git checkout -f $backupHead -- "$sourceRelativePath" 2>&1
                             if ($out -is [System.Management.Automation.ErrorRecord]) {
