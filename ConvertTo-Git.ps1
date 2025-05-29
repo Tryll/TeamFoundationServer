@@ -1362,15 +1362,16 @@ foreach ($cs in $sortedHistory) {
 }
 } finally { 
     
+    $stateFile = join-path $targetRoot "laststate.json"
     @{
         processedChangesets = $processedChangesets
         processedItems = $processedItems
         gitGCCounter = $gitGCCounter
         branchHashTracker = $branchHashTracker
         branches = $branches
-    } | convertto-json | out-file (join-path $targetRoot "laststate.json")
+    } | convertto-json | out-file $stateFile
 
-    write-host "state file saved"
+    write-host "State file saved $stateFile"
 }
 
 # Clear the progress bar
