@@ -221,7 +221,7 @@ function Add-GitBranch {
     # Creates orphan branches as default, from sourceName which is always main.
     # If this logic works, we can reduce complexity in this function.
     # Automatically creates branch with name "branchName"
-    & $git worktree add -f --orphan "../$branchName" | write-verbose
+    git worktree add -f --orphan "../$branchName" | write-verbose
 
 
     pop-location
