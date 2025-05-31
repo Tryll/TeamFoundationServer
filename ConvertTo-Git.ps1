@@ -1133,7 +1133,7 @@ foreach ($cs in $sortedHistory) {
                 # Default Commit File action: Edit, Add, Branch without source and so on:
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Downloading" -ForegroundColor Gray
 
-                try {
+          
                     # Creates the target file and directory structure
                     $target = new-item -path $relativePath -itemType File -force -erroraction silentlycontinue
                     remove-item -path $relativePath
@@ -1156,11 +1156,23 @@ foreach ($cs in $sortedHistory) {
                     $realRelativePath = $realRelativePath.Replace("\","/")
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path"
                     # Remove the file or directory  - Is this strictly required ?
+                    $originalPreference = $ErrorActionPreference
+                    $ErrorActionPreference = 'Continue'
+
                     $out=& $git add -f "$realRelativePath" 2>&1
+                    
+                    $ErrorActionPreference= $originalPreference
     
                     if ($out -is [System.Management.Automation.ErrorRecord]) {
-                        Write-Host ($out |convertto-json )
-                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File download add failed" 
+                        $message = $out.Exception.Message
+                        if ($message.Contains("warning")) {
+                            Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - $message" 
+                        } else {
+                            Write-Host ($out |convertto-json )
+                            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId] to $relativePath : $_" -ForegroundColor Red
+                            throw("Failed to download $itemPath to $relativePath")
+                        }
+                        
                     } 
 
                     
@@ -1168,10 +1180,6 @@ foreach ($cs in $sortedHistory) {
                     $fileDeleted = $false
                     
 
-                } catch {
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId] to $relativePath : $_" -ForegroundColor Red
-                    throw("Failed to download $itemPath to $relativePath")
-                }
 
                 # This fails intermittently, maybe a add -A is better
                 #$out=git add "$relativePath" 2>&1
