@@ -156,7 +156,7 @@ param(
 
 )
 
-
+$GIT_PATH = $git
 
 # Support functions
 # ********************************
@@ -288,6 +288,30 @@ function Compare-Files {
     return ($LASTEXITCODE -eq 0)
 }
 
+function Invoke-Git {
+
+    $gitPath = if ($global:GIT_PATH) { $global:GIT_PATH } else { "git" }
+    $originalPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $gitOutput = & $gitPath @args 2>&1
+    $ErrorActionPreference= $originalPreference
+    
+    if ($gitOutput -ne $null -and $gitOutput[0] -is [System.Management.Automation.ErrorRecord]) {
+        $message = $gitOutput[0].Exception.Message
+        if ($message.ToLower().StartsWith("warning")) {
+            Write-Warning $message
+        } else {
+            Write-Error $message -ErrorAction Stop
+        }
+    } 
+
+    return $gitOutput  | % { 
+        [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding("DOS-862").GetBytes($_)) 
+    }
+    
+}
+
+
 
 function Get-SourceItem {
     param($change, $changesetId, $currentBranchName)
@@ -360,7 +384,7 @@ function Get-SourceItem {
                 Write-Verbose "Get-SourceItem: Looking in $($Source.BranchName)-$i : $tryHash"
             
                 # Check if file is changed and part of this commit
-                $lastFoundFile = & $git show --name-only $tryHash 2>&1 | ? { $_ -ieq "$gitLocalName" }
+                $lastFoundFile = invoke-git show --name-only $tryHash | ? { $_ -ieq "$gitLocalName" }
                 if ($lastFoundFile -ne $null ) {
                     $lastFoundIn=$i
                     # Break on first hit
