@@ -126,7 +126,7 @@ param(
     [int]$FromChangesetId = 0,
 
     [Parameter(Mandatory=$false)]
-    [string]$git = "git",
+    [string]$git = (if ([string]::IsNullOrEmpty($ENV:GIT_PATH)) { "git" } else { $ENV:GIT_PATH }),
 
 
     # Quality control effectively checks every iteration of a file, this will slow down the process, but ensure the files are correct.
@@ -156,7 +156,6 @@ param(
 
 )
 
-$GIT_PATH = $git
 
 # Support functions
 # ********************************
@@ -289,7 +288,7 @@ function Compare-Files {
 }
 
 function Invoke-Git {
-
+   
     $gitPath = if ($global:GIT_PATH) { $global:GIT_PATH } else { "git" }
     $originalPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
@@ -298,9 +297,10 @@ function Invoke-Git {
     
     if ($gitOutput -ne $null -and $gitOutput[0] -is [System.Management.Automation.ErrorRecord]) {
         $message = $gitOutput[0].Exception.Message
-        if ($message.ToLower().StartsWith("warning")) {
+        if ($message.ToLower().StartsWith("warning") -or $message.ToLower().StartsWith("error")) {
             Write-Warning $message
         } else {
+            # fatal and others
             Write-Error $message -ErrorAction Stop
         }
     } 
@@ -311,6 +311,32 @@ function Invoke-Git {
     
 }
 
+function Get-TfsItem {
+    param(
+        [Parameter(Mandatory=$true)]
+        [int]
+        $ChangesetId,
+
+        [Parameter(Mandatory=$true)]
+        [string]
+        $Item,
+
+        [Parameter(Mandatory=$false)]
+        [Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer]
+        $tfsConnection = $null
+    ) 
+
+    if ($tfsConnection -eq $null -and $global:TFSConnection -ne $null) {
+        $tfsConnection = $global:TFSConnection
+    } else {
+        write-error "Requires TFS Connection" -ErrorAction stop
+    }
+
+    $changeset = $tfsConnection.GetChangeset($ChangesetId)
+
+    return $changeset.changes | ? { $_.Item.ServerItem -ieq $Item}
+
+}
 
 
 function Get-SourceItem {
@@ -351,7 +377,7 @@ function Get-SourceItem {
     # Ensure we have Window format paths
     $Source.RelativePath = $Source.Path.Replace($Source.Branch.TfsPath, $Source.Branch.Rewrite).TrimStart('/').Replace('/', '\')
 
-    Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] with rewrite '$($Source.Branch.Rewrite)' for $($Source.RelativePath)"
+    Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] [$($Source.Hash)] with rewrite '$($Source.Branch.Rewrite)' for $($Source.RelativePath)"
 
     # Scan current first, as this will not be possible to git history scan if in current - Check if file is in current folder structure (could use git status file here)
     # This is what TFS does, but it should really have picked from previous.
@@ -367,53 +393,132 @@ function Get-SourceItem {
     }
 
     # Scan in range if required
-    if ($Source.ChangesetId -ne $Source.ChangesetIdFrom) {
-        #Write-Verbose "Get-SourceItem: Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
-        $lastFoundIn=0
-        $lastFoundFile=""
-        $gitLocalName = $Source.RelativePath.Replace("\","/")
 
-        # Iterate from Top to Bottom, exit on first hit as this will be the newest change
-        for($i= $Source.ChangesetId; $i -ge $Source.ChangesetIdFrom; $i--) {
+    #Write-Verbose "Get-SourceItem: Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
+    $lastFoundIn=0
+    $lastFoundFile=""
+    $gitLocalName = $Source.RelativePath.Replace("\","/")
 
-            # Check if $i/"changesetid" is valid for this branch as a previous commit
-            if ($branchHashTracker.ContainsKey("$($Source.BranchName)-$i")) {
-                # Fetch hash from previous commit
-                $tryHash = $branchHashTracker["$($Source.BranchName)-$i"]
+    # Iterate from Top to Bottom, exit on first hit as this will be the newest change
+    for($i= $Source.ChangesetId; $i -ge $Source.ChangesetIdFrom; $i--) {
 
-                Write-Verbose "Get-SourceItem: Looking in $($Source.BranchName)-$i : $tryHash"
-            
-                # Check if file is changed and part of this commit
-                $lastFoundFile = invoke-git show --name-only $tryHash | ? { $_ -ieq "$gitLocalName" }
-                if ($lastFoundFile -ne $null ) {
-                    $lastFoundIn=$i
-                    # Break on first hit
-                    break
-                } else {
-                    # Write-Verbose "Did not find $gitLocalName in this:"
-                    # & $git show --name-only $tryHash 2>&1  | write-host
-                    
+        # Check if $i/"changesetid" is valid for this branch as a previous commit
+        if ($branchHashTracker.ContainsKey("$($Source.BranchName)-$i")) {
+            # Fetch hash from previous commit
+            $tryHash = $branchHashTracker["$($Source.BranchName)-$i"]
+
+            Write-Verbose "Get-SourceItem: Looking in $($Source.BranchName)-$i : $tryHash"
+        
+            # Check if file is changed and part of this commit
+            $lastFoundFile = invoke-git show --name-only $tryHash | ? { $_ -ieq "$gitLocalName" }
+            if ($lastFoundFile -ne $null ) {
+                $lastFoundIn=$i
+                # Break on first hit
+                break
+            } else {
+                
+                # TFS supports references to deleted files, isnt that marvelous.
+                # We need to check if we are referencing a deleted file, then accept and return empty source as it is impossible to merge from a deleted commit
+                $previous = get-tfsitem -changesetid $i -item $source.RelativePath
+                if ($previous -ne $null -and $previous.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+                    Write-Verbose "Get-SourceItem: [$($Source.BranchName)] [TFS-$i] $($Source.RelativePath) Found deleted in previous TFS changeset."
+                    # Returns empty Source
+                    $Source.ChangesetId = $i
+                    $Source.Hash = $null
+                    return $Source
                 }
+
+                # Continue searching
+
             }
         }
-        if ($lastFoundIn -ne 0) {
-            # using lastFoundFile to match case:
-            Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" last changed in TFS-$lastFoundIn"
-
-            $Source.ChangesetId = $lastFoundIn
-            # reverting back to windows format
-            $Source.RelativePath = $lastFoundfile.Replace("/","\") 
-            $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]      
-        }  else {
-            Write-Verbose "Get-SourceItem: Scan failed to find $($Source.RelativePath) for changeset range $($Source.ChangesetId)-$($Source.ChangesetIdFrom)"
-        }
     }
-    
+
+
+    if ($lastFoundIn -ne 0) {
+        # using lastFoundFile to match case:
+        Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" last changed in TFS-$lastFoundIn"
+
+        $Source.ChangesetId = $lastFoundIn
+        # reverting back to windows format
+        $Source.RelativePath = $lastFoundfile.Replace("/","\") 
+        $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]      
+    }  else {
+
+        # No source solution found, shouldnt happen
+        Write-Error "Get-SourceItem: Scan failed to find $($Source.RelativePath) for changeset range $($Source.ChangesetId)-$($Source.ChangesetIdFrom)" -ErrorAction Stop
+    }
+
 
     Write-Verbose "Get-SourceItem: [$($Source.BranchName)] [$($Source.ChangesetId)-$($Source.ChangesetIdFrom)] [$($Source.Hash)] $($Source.RelativePath)"
 
  
     return $Source
+}
+
+
+function Commit-ChangesetToGit {
+    param(
+        [Microsoft.TeamFoundation.VersionControl.Client.Changeset]
+        $changeset,
+
+        [string]
+        $branchName
+    )
+
+    try {
+        push-location $branchName
+
+        # Set environment variables for commit author and date
+        $env:GIT_AUTHOR_NAME = $changeset.OwnerDisplayName
+        $env:GIT_AUTHOR_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
+        $env:GIT_AUTHOR_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
+        $env:GIT_COMMITTER_NAME = $changeset.OwnerDisplayName
+        $env:GIT_COMMITTER_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
+        $env:GIT_COMMITTER_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
+
+        
+        # Enter source branch for early commit
+    
+        invoke-git status  | Write-Host
+
+        invoke-git add -fA | Write-Host
+     
+        # Prepare commit message, handle any type of comments and special chars
+        $commentTmpFile = [System.IO.Path]::GetTempFileName()
+        "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]" | Out-File -FilePath $commentTmpFile -Encoding ASCII -NoNewline
+            
+        $currentHash = invoke-git rev-parse HEAD
+                       
+        # Handle special  commit message chars:
+        invoke-git commit -F $commentTmpFile --allow-empty | Write-Host
+
+        $hash = invoke-git  rev-parse HEAD  
+        
+        if ($hash -eq $currentHash) {
+            throw "Commit failed, stopping for review"
+        }
+
+        Remove-Item -FilePath $commentTmpFile -force
+
+        $branchHashTracker["$branchName-$changesetId"] =  $hash
+        Write-Host "[TFS-$changesetId] [$branchName] [$hash] Comitted" -ForegroundColor Gray
+      
+       
+        pop-location #sourceBranchName
+
+
+    } finally {
+
+        # Clean up environment variables
+        Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_AUTHOR_EMAIL -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_COMMITTER_NAME -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
+    }
+
 }
 
 function Sort-TfsChangeItems {
@@ -638,7 +743,7 @@ try {
     $tfsServer.Authenticate()
     
     $vcs = $tfsServer.GetService([Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer])
-    
+    $global:TFSConnection = $vcs
     Write-Host "Connected successfully" -ForegroundColor Green
 } catch {
     Write-Host "Error connecting to TFS: $_" -ForegroundColor Red
@@ -949,57 +1054,21 @@ foreach ($cs in $sortedHistory) {
                  
                         pop-location # Exit current branch
 
-                        try {
-                            # Set environment variables for commit author and date
-                            $env:GIT_AUTHOR_NAME = $changeset.OwnerDisplayName
-                            $env:GIT_AUTHOR_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
-                            $env:GIT_AUTHOR_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
-                            $env:GIT_COMMITTER_NAME = $changeset.OwnerDisplayName
-                            $env:GIT_COMMITTER_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
-                            $env:GIT_COMMITTER_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
-                    
-                          
-                            # Enter source branch for early commit
-                            push-location $sourceBranchName
-                            & $git status 2>&1 | Write-Host
-
-                            & $git add -fA 2>&1 | Write-Host
-                            $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
-
-                            $originalPreference = $ErrorActionPreference
-                            $ErrorActionPreference = 'Continue'
-                            & $git commit -m $commitMessage --allow-empty 2>&1 | Write-Host
-                            $sourcehash = & $git rev-parse HEAD
-                            $ErrorActionPreference = $originalPreference
-
-                            $branchHashTracker["$sourceBranchName-$changesetId"] = $sourcehash
-                            Write-Host "[TFS-$changesetId] [$sourceBranchName] [$sourcehash] Comitted" -ForegroundColor Gray
-
-                            pop-location #sourceBranchName
-                 
-                            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] Commit updated!" -ForegroundColor Gray
-          
+                        Commit-ChangesetToGit -Changeset $changeset -branchName $sourceBranchName
                         
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] Commit updated!" -ForegroundColor Gray
+          
+                      
+                      
+                        # Reenter branch
+                        push-location $branchName
 
-                        } finally {
-                    
-                            # Clean up environment variables
-                            Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
-                            Remove-Item Env:\GIT_AUTHOR_EMAIL -ErrorAction SilentlyContinue
-                            Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
-                            Remove-Item Env:\GIT_COMMITTER_NAME -ErrorAction SilentlyContinue
-                            Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
-                            Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
-                        }
 
                         # Source branch dont need changeset finalization commit.
                         # IF this comes again, we'll overwrite branchHashTracker and be unable to refer to earlier commits from tfs.
                         # Expecting TFS to submitt its changes in sequence, so that this does not happen!
                         $branchChanges.Remove($sourceBranchName)
                         
-                        # Reenter branch
-                        push-location $branchName
-
                     }
                     
 
@@ -1019,48 +1088,16 @@ foreach ($cs in $sortedHistory) {
                     # CHECKOUT from hash, it that exists - else file is local to branch:
                     if ($sourcehash -ne $null -and $changeItem.DeletionId -eq 0) {
 
-                        # Try to find correct file case from git commit:
-                        $flipped=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
-                        $sourceRelativePath = & $git show --name-only $sourcehash 2>&1 | ? { $_ -ieq "$flipped" }
-
-                        # The file was not found as part of the changeset, attempting to find from commit tree
-                        if ([string]::IsNullOrEmpty($sourceRelativePath)) {
-                            Write-Verbose "$flipped was not found in CHANGES for hash $sourcehash, checking if file exists in tree."
-                            
-                            # Try to get exact case from the commit tree
-                            $sourceRelativePath = & $git ls-tree -r --name-only $sourcehash 2>&1 | ? { $_ -ieq "$flipped" }
-                            
-                            if ([string]::IsNullOrEmpty($sourceRelativePath)) {
-                                Write-Verbose "$sourceRelativePath does not exist at hash $sourcehash."
-                                throw "File reference not found."
-                            }
-                        }
-
-
                         #$sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip path seps back
 
                         Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
+                        $sourceRelativePath = $sourceRelativePath.Replace("\","/")
 
-                        $originalPreference = $ErrorActionPreference
-                        $ErrorActionPreference = 'Continue'
-                        $out=& $git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
-                        $ErrorActionPreference = $originalPreference
-
+                        invoke-git checkout -f $sourcehash -- "$sourceRelativePath" | write-verbose
+                        
                         # We need to flip this back for this to work
                         $sourceRelativePath = $sourceRelativePath.Replace("/","\")
                       
-                        if ($out -is [System.Management.Automation.ErrorRecord]) {
-
-                            write-host ($out |convertto-json)
-                            $status = & $git show --name-only $sourcehash 2>&1
-                            
-                            Write-verbose ($changeItem | convertto-json)
-                            Write-Verbose "Something whent wrong with git checkout [$sourcehash] $sourceRelativePath"
-
-                            throw ($out)
-
-                          
-                        }
                        
                     } else {
                         if ($changeItem.DeletionId -gt 0) {
@@ -1093,19 +1130,13 @@ foreach ($cs in $sortedHistory) {
                         $relativePath = $relativePath.Replace("\","/")
 
                         Write-Verbose "Renaming intermediate native $sourceRelativePath to target $relativePath"
-                        $out=& $git mv -f "$sourceRelativePath" "$relativePath"  2>&1 
+                        invoke-git mv -f "$sourceRelativePath" "$relativePath" | write-verbose
 
-                        Write-Host ($out | convertto-json)
-                        
 
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath from $backupHead"
-                            # Revert the original sourcerelativePath
-                            $out=& $git checkout -f $backupHead -- "$sourceRelativePath" 2>&1
-                            if ($out -is [System.Management.Automation.ErrorRecord]) {
-                                Write-Verbose "git checkout failed $backupHead $sourceRelativePath"
-                                throw $out
-                            }
+                            
+                            invoke-git checkout -f $backupHead -- "$sourceRelativePath" | write-verbose
                         }
 
                         
@@ -1329,69 +1360,17 @@ foreach ($cs in $sortedHistory) {
         }
     }
 
+    
 
-    try {
-        # Set environment variables for commit author and date
-        $env:GIT_AUTHOR_NAME = $changeset.OwnerDisplayName
-        $env:GIT_AUTHOR_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
-        $env:GIT_AUTHOR_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
-        $env:GIT_COMMITTER_NAME = $changeset.OwnerDisplayName
-        $env:GIT_COMMITTER_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
-        $env:GIT_COMMITTER_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
+    # Commit changes to Git
+    foreach($branch in $branchChanges.Keys) {
+        
+        Commit-ChangesetToGit -Changeset $changeset -branchName $branch
 
-        # Commit changes to Git
-        foreach($branch in $branchChanges.Keys) {
-            push-location $branch
-            
+        $gitGCCounter++
 
-            # Stage all changes
-            $o = & $git status 2>&1
-            write-verbose ($o -join "`n")
-
-            # Stage all changes
-            $o = & $git add -fA 2>&1
-            write-verbose ($o -join "`n")
-
-            # Prepare commit message, handle any type of comments and special chars
-            $commentTmpFile = [System.IO.Path]::GetTempFileName()
-            "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]" | Out-File -FilePath $commentTmpFile -Encoding ASCII -NoNewline
-            
-            # Make the commit
-            $originalPreference = $ErrorActionPreference
-            $ErrorActionPreference = 'Continue'
-
-            # Fetch current for validation
-            $currentHash = & $git rev-parse HEAD 
-            
-            # Handle special  commit message chars:
-            & $git commit -F $commentTmpFile --allow-empty 2>&1 | Write-Host
-
-            $hash = & $git rev-parse HEAD  
-            $ErrorActionPreference  = $originalPreference
-            Remove-Item $commentTmpFile
-
-            if ($hash -eq $currentHash) {
-                throw "Commit failed, stopping for review"
-            }
-
-            $branchHashTracker["$branch-$changesetId"] =  $hash
-            Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted" -ForegroundColor Gray
-            pop-location
-
-            $gitGCCounter++
-
-        }
-
-    } finally {
-
-        # Clean up environment variables
-        Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_AUTHOR_EMAIL -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_COMMITTER_NAME -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
     }
+
     
    
     if ($gitGCCounter -gt 10) {
