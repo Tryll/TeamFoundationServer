@@ -221,11 +221,8 @@ function Add-GitBranch {
     # Creates orphan branches as default, from sourceName which is always main.
     # If this logic works, we can reduce complexity in this function.
     # Automatically creates branch with name "branchName"
-    git worktree add --orphan "../$branchName" | write-host
-    $succeeded = $?
-    if (-not $succeeded) {
-        throw ("Add-GitBranch: Work tree creation failed, to long paths? ")
-    }
+    & $git worktree add -f --orphan "../$branchName" | write-verbose
+
 
     pop-location
 
@@ -280,7 +277,7 @@ function Compare-Files {
     $fullPath2 = (Resolve-Path $File2).Path
     
     # Use git diff with -w to ignore all whitespace differences (including BOMs)
-    $result = & $git diff --no-index --exit-code -w $fullPath1 $fullPath2 2>&1
+    $result = & $git diff --no-index --exit-code -w "$fullPath1" "$fullPath2" 2>&1
     
     # Git returns exit code 0 if files are identical, 1 if different
     # Return $true if files are the same (ignoring BOMs)
@@ -300,6 +297,15 @@ function Invoke-Git {
         if ($message.ToLower().StartsWith("warning") -or $message.ToLower().StartsWith("error")) {
             Write-Warning $message
         } else {
+            if (![String]::IsNullOrEmpty($message) -and $message.Trim() -eq "fatal: unable to write new index file") {
+                Write-Warning "Retrying due to $message"
+                invoke-git gc --quiet | write-verbose
+                try {
+                    return Invoke-Git @args
+                } catch {
+                    throw $_
+                }
+            }
             # fatal and others
             Write-Error $message -ErrorAction Stop
         }
@@ -499,7 +505,7 @@ function Commit-ChangesetToGit {
             throw "Commit failed, stopping for review"
         }
 
-        Remove-Item -FilePath $commentTmpFile -force
+        Remove-Item -Path $commentTmpFile -force
 
         $branchHashTracker["$branchName-$changesetId"] =  $hash
         Write-Host "[TFS-$changesetId] [$branchName] [$hash] Comitted" -ForegroundColor Gray
@@ -966,6 +972,7 @@ foreach ($cs in $sortedHistory) {
 
         # Enter Branch:
         Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - Processing" -ForegroundColor Cyan
+
         push-location $branchName
         $branchChanges[$branchName] = $true
 
@@ -1211,37 +1218,14 @@ foreach ($cs in $sortedHistory) {
                     $realRelativePath = $realRelativePath.Replace("\","/")
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path"
                     # Remove the file or directory  - Is this strictly required ?
-                    $originalPreference = $ErrorActionPreference
-                    $ErrorActionPreference = 'Continue'
+           
 
-                    $out=& $git add -f "$realRelativePath" 2>&1
+                    invoke-git add -f "$realRelativePath" | write-verbose
                     
-                    $ErrorActionPreference= $originalPreference
-    
-                    if ($out -is [System.Management.Automation.ErrorRecord]) {
-                        $message = $out.Exception.Message
-                        if ($message.Contains("warning")) {
-                            Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - $message" 
-                        } else {
-                            Write-Host ($out |convertto-json )
-                            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId] to $relativePath : $_" -ForegroundColor Red
-                            throw("Failed to download $itemPath to $relativePath")
-                        }
-                        
-                    } 
-
                     
                     $qualityCheckNotApplicable = $true
                     $fileDeleted = $false
                     
-
-
-                # This fails intermittently, maybe a add -A is better
-                #$out=git add "$relativePath" 2>&1
-                #if ($out -is [System.Management.Automation.ErrorRecord]) {
-                #    Write-Verbose "Git add $relativePath failed, for $($target.FullName)"
-                #    throw $out
-                #}
             }
 
 
@@ -1255,24 +1239,22 @@ foreach ($cs in $sortedHistory) {
                 if (Test-Path -path $relativePath -PathType Leaf) {
                     
                     $gitLocalName = $relativePath.Replace("\","/").Trim()
-                    $gitLocalName = & $git ls-files 2>&1 | ? { $_ -ieq "$gitLocalName" }
 
-                    # Make the delete
-                    $originalPreference = $ErrorActionPreference
-                    $ErrorActionPreference = 'Continue'
+
+                    $gitLocalName = invoke-git ls-files | ? { $_ -ieq "$gitLocalName" }
+
 
                     # Flip to linux
                  
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $gitLocalName - Deleting - Real relative path"
                     # Remove the file or directory
-                    $out=& $git rm -f "$gitLocalName" 2>&1
- 
+                    invoke-git rm -f "$gitLocalName" | write-verbose
 
-                    $ErrorActionPreference = $originalPreference
-                    if ($out -is [System.Management.Automation.ErrorRecord]) {
-                        Write-Host ($out |convertto-json )
-                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File allready deleted/missing. (TFS Supported)" 
-                    } 
+                    #$ErrorActionPreference = $originalPreference
+                   # if ($out -is [System.Management.Automation.ErrorRecord]) {
+                    #    Write-Host ($out |convertto-json )
+                    #    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File allready deleted/missing. (TFS Supported)" 
+                   # } 
                     $fileDeleted = $true
 
 
@@ -1377,7 +1359,7 @@ foreach ($cs in $sortedHistory) {
         $gitGCCounter = 0
         push-location $projectBranch
         Write-Verbose "Performing git garbage collection, every 20'th commit"
-        & $git gc --quiet
+        invoke-git gc --quiet
         pop-location
     }
 
