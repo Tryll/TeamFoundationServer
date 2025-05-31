@@ -1189,27 +1189,34 @@ foreach ($cs in $sortedHistory) {
                  -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting" -ForegroundColor Gray
 
+                if (Test-Path -path $relativePath -PathType Leaf) {
+                    
+                    $gitLocalName = $relativePath.Replace("\","/").Trim()
+                    $gitLocalName = & $git ls-files 2>&1 | ? { $_ -ieq "$gitLocalName" }
 
-                # Make the delete
-                $originalPreference = $ErrorActionPreference
-                $ErrorActionPreference = 'Continue'
+                    # Make the delete
+                    $originalPreference = $ErrorActionPreference
+                    $ErrorActionPreference = 'Continue'
 
-                # Flip to linux
-                $relativePath = $relativePath.Replace("\","/").Trim()
-                # Remove the file or directory
-                $out=& $git rm -f "$relativePath" 2>&1
-                # Flip to windows
-                $relativePath = $relativePath.Replace("/","\")
+                    # Flip to linux
+                 
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $gitLocalName - Deleting - Real relative path"
+                    # Remove the file or directory
+                    $out=& $git rm -f "$gitLocalName" 2>&1
+ 
+
+                    $ErrorActionPreference = $originalPreference
+                    if ($out -is [System.Management.Automation.ErrorRecord]) {
+                        Write-Host ($out |convertto-json )
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File allready deleted/missing. (TFS Supported)" 
+                    } 
+                    $fileDeleted = $true
 
 
-                $ErrorActionPreference = $originalPreference
-
-                $fileDeleted = $true
-                if ($out -is [System.Management.Automation.ErrorRecord]) {
-                    Write-Host ($out |convertto-json )
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File allready deleted/missing. (TFS Supported)" 
-                } 
-
+                } else {
+                    throw "File allready missing?"
+                }
+                
             }
         
         } catch {
