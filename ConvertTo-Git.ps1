@@ -251,7 +251,7 @@ function Get-ItemBranch {
 
     # Default to main
     if ($path -eq  '$') {
-        Write-Verbose "Get-ItemBranch: Defaulting to main branch for $path at TFS-$changesetId"
+        # Write-Verbose "Get-ItemBranch: Defaulting to main branch for $path at TFS-$changesetId"
         return "$projectPath/$projectBranch"
     }
 
@@ -634,18 +634,23 @@ Write-Host "Found project $projectPath"
 
 $env:GIT_CONFIG_GLOBAL = Join-Path -path (pwd) -childpath ".gitconfig"
 # Default Git settings
+
 & $git config --global user.email "tfs@git"
+
 & $git config --global user.name "TFS migration"
 
 & $git config --global core.autocrlf false
+
 & $git config --global core.longpaths true
 # Old TFS checkins are case-insensitive, so we need to ignore case.
+
 & $git config --global core.ignorecase true
 
 # Disable special unicode file name treatments
 & $git config --global core.quotepath false
 
-& $git config --global --add safe.directory '*'
+& $git config --global --add safe.directory "*"
+
 
 # Create the first main branch folder and initialize Git
 $projectBranch = "main"
@@ -673,7 +678,10 @@ if ($FromChangesetId -gt 0) {
         throw "Unable to continue from previous run, laststate.json missing"
     }
 
-    $state = get-content laststate.json  | convertfrom-json  -AsHashtable
+    Add-Type -AssemblyName System.Web.Extensions
+    $serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+    $state = $serializer.DeserializeObject((get-content laststate.json ))
+  
     $processedChangesets = $state.processedChangesets
     $processedItems = $state.processedItems
     $gitGCCounter = $state.gitGCCounter
@@ -735,6 +743,7 @@ $sortedHistory = $history | Sort-Object CreationDate
 $totalChangesets = $sortedHistory.Count
 Write-Host "Found $totalChangesets changesets - processing from oldest to newest" -ForegroundColor Green
 
+$totalChangesets +=$FromChangesetId
 
 try {   # Finally block to save state.
 
@@ -831,11 +840,10 @@ foreach ($cs in $sortedHistory) {
         push-location $branchName
         $branchChanges[$branchName] = $true
 
-    
 
         try { #  try/finally for pop-location and  quality control
 
-        
+    
 
 
             # Retrieve files from a Source changeset, and prepare for other actions later
@@ -931,7 +939,7 @@ foreach ($cs in $sortedHistory) {
                             push-location $sourceBranchName
                             & $git status 2>&1 | Write-Host
 
-                            & $git add -A 2>&1 | Write-Host
+                            & $git add -fA 2>&1 | Write-Host
                             $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
 
                             $originalPreference = $ErrorActionPreference
@@ -1113,6 +1121,8 @@ foreach ($cs in $sortedHistory) {
                 continue
                 
             }
+
+      
         
           # Add/Edit - Downloading:
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add -or 
@@ -1143,11 +1153,10 @@ foreach ($cs in $sortedHistory) {
                     $realFullName = Get-RealCasedPath -path $fullName
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realFullName from $fullName"
                     $realRelativePath = $realFullName.SubString($realFullName.Length - $relativePath.Trim().Length)
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path"
                     $realRelativePath = $realRelativePath.Replace("\","/")
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real git  relative path"
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path"
                     # Remove the file or directory  - Is this strictly required ?
-                    $out=& $git add "$realRelativePath" 2>&1
+                    $out=& $git add -f "$realRelativePath" 2>&1
     
                     if ($out -is [System.Management.Automation.ErrorRecord]) {
                         Write-Host ($out |convertto-json )
@@ -1301,7 +1310,7 @@ foreach ($cs in $sortedHistory) {
             write-verbose ($o -join "`n")
 
             # Stage all changes
-            $o = & $git add -A 2>&1
+            $o = & $git add -fA 2>&1
             write-verbose ($o -join "`n")
 
             # Prepare commit message, handle any type of comments and special chars
