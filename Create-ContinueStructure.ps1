@@ -6,7 +6,7 @@ param(
     [string]$OutputPath,
 
     [Parameter(Mandatory=$false)]
-    [string]$PrimaryBranchName = "main"
+    [string]$PrimaryBranchName = "main",
 
     [Parameter(Mandatory=$false)]
     [string]$git = "git"
