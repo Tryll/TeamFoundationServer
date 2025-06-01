@@ -884,6 +884,7 @@ if ($Continue -and (Test-Path "laststate.json")) {
     push-location $projectBranch
     git reset --hard HEAD
     git clean -fd
+    git gc
     pop-location
     Write-Host "Resuming processing from $FromChangesetId"
 }
@@ -1313,8 +1314,10 @@ foreach ($cs in $sortedHistory) {
                 if (Test-Path -path $relativePath -PathType Leaf) {
                     
                     $gitLocalName = $relativePath.Replace("\","/").Trim()
+                    $dir = [System.IO.Path]::GetDirectoryName($gitLocalName)
+                    $dir = $dir.Replace("\","/")
 
-                    $gitLocalName = invoke-git ls-files | ? { $_ -ieq "$gitLocalName" }
+                    $gitLocalName = invoke-git ls-files "$dir" | ? { $_ -ieq "$gitLocalName" }
 
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $gitLocalName - Deleting - Real relative path"
                     
