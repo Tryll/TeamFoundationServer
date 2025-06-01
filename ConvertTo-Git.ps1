@@ -326,7 +326,8 @@ function Invoke-Git {
         if ($message.ToLower().StartsWith("fatal") -or $message.ToLower().StartsWith("error")) {
             if (![String]::IsNullOrEmpty($message) -and (
                     $message.Trim() -eq "fatal: unable to write new index file"  -or
-                    $message.Trim().EndsWith("Resource temporarily unavailable")
+                    $message.Trim().EndsWith("Resource temporarily unavailable") -or
+                    $message.Trim() -eq "fatal: failed to run pack-refs"  
                     )) {
                 Write-Warning "Retrying due to $message"
                 invoke-git gc | write-verbose
@@ -1415,7 +1416,7 @@ foreach ($cs in $sortedHistory) {
         $gitGCCounter = 0
         push-location $projectBranch
         Write-Verbose "Performing git garbage collection, every 20'th commit"
-        invoke-git gc --quiet
+        invoke-git gc
         pop-location
     }
 
