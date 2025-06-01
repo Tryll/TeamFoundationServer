@@ -334,7 +334,8 @@ function Invoke-Git {
                     $message.Trim() -eq "fatal: failed to run pack-refs"  
                     )) {
                 Write-Warning "Retrying due to $message"
-                invoke-git gc | write-verbose
+                # Alot of failes doing this manually..
+                #invoke-git gc | write-verbose
              
                 return Invoke-Git @args
           
@@ -534,20 +535,27 @@ function Commit-ChangesetToGit {
     
         invoke-git status  | Write-Host
 
-        invoke-git add -fA | Write-Host
+        invoke-git add -vfA | Write-Host
      
         # Prepare commit message, handle any type of comments and special chars
         $commentTmpFile = [System.IO.Path]::GetTempFileName()
         "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]" | Out-File -FilePath $commentTmpFile -Encoding ASCII -NoNewline
             
-        $currentHash = invoke-git rev-parse HEAD
-                       
+        $currentHash = $null
+        try {
+             $currentHash = invoke-git rev-parse HEAD
+        } catch {
+            # first commit can report missing HEAD
+        }          
+
         # Handle special  commit message chars:
         invoke-git commit -F $commentTmpFile --allow-empty | Write-Host
 
-        $hash = invoke-git  rev-parse HEAD  
+    
         
-        if ($hash -eq $currentHash) {
+        $hash = invoke-git rev-parse HEAD  
+        
+        if ($currentHash -ne $null -and $hash -eq $currentHash) {
             throw "Commit failed, stopping for review"
         }
 
@@ -1415,10 +1423,12 @@ foreach ($cs in $sortedHistory) {
    
     if ($gitGCCounter -gt 10) {
         $gitGCCounter = 0
-        push-location $projectBranch
-        Write-Verbose "Performing git garbage collection, every 20'th commit"
-        invoke-git gc
-        pop-location
+        # Disabled due to excessive failures, at least with cygwin git
+
+       # push-location $projectBranch
+        #Write-Verbose "Performing git garbage collection, every 20'th commit"
+        #invoke-git gc
+        #pop-location
     }
 
 
