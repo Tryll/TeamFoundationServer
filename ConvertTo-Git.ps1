@@ -125,6 +125,9 @@ param(
     [Parameter(Mandatory=$false)]
     [int]$FromChangesetId = 0,
 
+    [Parameter(mandatory=$false)]
+    [switch]$Continue,
+
     [Parameter(Mandatory=$false)]
     [string]$git = (if ([string]::IsNullOrEmpty($ENV:GIT_PATH)) { "git" } else { $ENV:GIT_PATH }),
 
@@ -156,7 +159,7 @@ param(
 
 )
 
-
+$global:GIT_PATH = $git
 # Support functions
 # ********************************
 #region SupportFunctions
@@ -223,8 +226,8 @@ function Add-GitBranch {
     # Automatically creates branch with name "branchName"
     git worktree add -f --orphan "../$branchName" | write-verbose
 
-
     pop-location
+
 
     return $branches[$fromContainer]
 }
@@ -273,48 +276,70 @@ function Compare-Files {
     }
     
     # Get full paths to avoid any path-related issues
-    $fullPath1 = (Resolve-Path $File1).Path
-    $fullPath2 = (Resolve-Path $File2).Path
+    #$fullPath1 = (Resolve-Path $File1).Path
+    #$fullPath2 = (Resolve-Path $File2).Path
     
+    $fullPath1 = $File1.Replace("\","/")
+    $fullPath2 = $File2.Replace("\","/")
     # Use git diff with -w to ignore all whitespace differences (including BOMs)
-    $result = & $git diff --no-index --exit-code -w "$fullPath1" "$fullPath2" 2>&1
-    
+    invoke-git diff --no-index --exit-code -w "$fullPath1" "$fullPath2"
+   
     # Git returns exit code 0 if files are identical, 1 if different
     # Return $true if files are the same (ignoring BOMs)
     return ($LASTEXITCODE -eq 0)
 }
 
+
 function Invoke-Git {
    
-    $gitPath = if ($global:GIT_PATH) { $global:GIT_PATH } else { "git" }
+    $gitPath = if ($global:GIT_PATH) { $global:GIT_PATH } else { if ($ENV:GIT_PATH) { $ENV:GIT_PATH } else { "git" } }
+
+    # Escapes {} with \ for \{ \} in filepaths
+    $escapedArgs = $args | % { $_ -replace '([{}])', '\$1' }
+   
     $originalPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $gitOutput = & $gitPath @args 2>&1
+    # Powershell has alot of problems providing both stderr and stdout
+    $stdErr =@()
+    $stdOut = @()
+       
+    & $gitPath @escapedArgs 2>&1 | % { if($_ -is [String]) { $stdOut+=$_ } else { $stdErr+=$_.Exception.Message} }
     $ErrorActionPreference= $originalPreference
-    
-    if ($gitOutput -ne $null -and $gitOutput[0] -is [System.Management.Automation.ErrorRecord]) {
-        $message = $gitOutput[0].Exception.Message
-        if ($message.ToLower().StartsWith("warning") -or $message.ToLower().StartsWith("error")) {
+
+    $gitOutput = $stdErr + $stdOut
+
+    $gitOutput = $gitOutput | % { 
+            [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding("DOS-862").GetBytes($_)) 
+    }
+   
+    # Pipes in PS reduces @("asd") to just "asd"
+    if ($gitOutput -ne $null -and $gitOutput -is [String]) {
+        $gitOutput = @($gitOutput)
+    }
+
+    if ($gitOutput -ne $null){
+        $message =  $gitOutput[0]
+        if ($message.ToLower().StartsWith("warning")) {
             Write-Warning $message
-        } else {
-            if (![String]::IsNullOrEmpty($message) -and $message.Trim() -eq "fatal: unable to write new index file") {
+        } 
+
+        if ($message.ToLower().StartsWith("fatal") -or $message.ToLower().StartsWith("error")) {
+            if (![String]::IsNullOrEmpty($message) -and (
+                    $message.Trim() -eq "fatal: unable to write new index file"  -or
+                    $message.Trim().EndsWith("Resource temporarily unavailable")
+                    )) {
                 Write-Warning "Retrying due to $message"
-                invoke-git gc --quiet | write-verbose
-                try {
-                    return Invoke-Git @args
-                } catch {
-                    throw $_
-                }
+                invoke-git gc | write-verbose
+             
+                return Invoke-Git @args
+          
             }
             # fatal and others
             Write-Error $message -ErrorAction Stop
         }
-    } 
-
-    return $gitOutput  | % { 
-        [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding("DOS-862").GetBytes($_)) 
     }
-    
+
+    return $gitOutput  
 }
 
 function Get-TfsItem {
@@ -328,17 +353,33 @@ function Get-TfsItem {
         $Item,
 
         [Parameter(Mandatory=$false)]
+        [string]
+        $Project = $global:TFSProject,
+
+        [Parameter(Mandatory=$false)]
         [Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer]
-        $tfsConnection = $null
+        $tfsConnection = $global:TFSConnection
     ) 
 
-    if ($tfsConnection -eq $null -and $global:TFSConnection -ne $null) {
-        $tfsConnection = $global:TFSConnection
-    } else {
+    if ($tfsConnection -eq $null) {
         write-error "Requires TFS Connection" -ErrorAction stop
     }
 
+    if (-not $Item.StartsWith("$") -and $Project -eq $null) {
+        write-error "Unrooted relative paths are not supported, either prefix Item or specify Project" -ErrorAction stop
+    }
+
+    if (-not $Item.StartsWith("$")) {
+        $Item = join-path -path $Project -childpath $Item
+        if (-not $Item.StartsWith("$")) {
+            $Item = "$/$Item"
+        }
+    }
+
     $changeset = $tfsConnection.GetChangeset($ChangesetId)
+
+    # Ensure path is TFS styled
+    $Item = $Item.Replace("\","/")
 
     return $changeset.changes | ? { $_.Item.ServerItem -ieq $Item}
 
@@ -425,7 +466,7 @@ function Get-SourceItem {
                 
                 # TFS supports references to deleted files, isnt that marvelous.
                 # We need to check if we are referencing a deleted file, then accept and return empty source as it is impossible to merge from a deleted commit
-                $previous = get-tfsitem -changesetid $i -item $source.RelativePath
+                $previous = get-tfsitem -changesetid $i -item $Source.RelativePath
                 if ($previous -ne $null -and $previous.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
                     Write-Verbose "Get-SourceItem: [$($Source.BranchName)] [TFS-$i] $($Source.RelativePath) Found deleted in previous TFS changeset."
                     # Returns empty Source
@@ -766,6 +807,7 @@ if ($project -eq $null) {
 }
 $projectPath=$project.ServerItem
 Write-Host "Found project $projectPath"
+$global:TFSProject = $projectPath
 
 $env:GIT_CONFIG_GLOBAL = Join-Path -path (pwd) -childpath ".gitconfig"
 # Default Git settings
@@ -808,7 +850,9 @@ $processedChangesets = 0
 $processedItems = 0
 $gitGCCounter = 0
 $branchHashTracker = @{}
-if ($FromChangesetId -gt 0) {
+$processingChangesetId = 0
+
+if ($Continue) {
     if (-not (Test-Path "laststate.json")) {
         throw "Unable to continue from previous run, laststate.json missing"
     }
@@ -822,7 +866,18 @@ if ($FromChangesetId -gt 0) {
     $gitGCCounter = $state.gitGCCounter
     $branchHashTracker = $state.branchHashTracker
     $branches  = $state.branches
+    if ($state.processingChangesetId -gt 0) {
+        $FromChangesetId  = $state.processingChangesetId
+    }
+
+    Write-Host "Rolling back to prepare for $FromChangesetId"
+    push-location $projectBranch
+    git reset --hard HEAD
+    git clean -fd
+    pop-location
+    Write-Host "Resuming processing from $FromChangesetId"
 }
+
 
 
 # New Repository or Continue:
@@ -920,6 +975,7 @@ foreach ($cs in $sortedHistory) {
         $changeCounter++
         $changeItem = $change.Item
         $changesetId = [Int]::Parse($changeItem.ChangesetId)
+        $processingChangesetId = $changesetId
         $changeType = [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]($change.ChangeType)
         $itemType = [Microsoft.TeamFoundation.VersionControl.Client.ItemType]($changeItem.ItemType)
         $itemId= [Int]::Parse($changeItem.ItemId)
@@ -1020,15 +1076,16 @@ foreach ($cs in $sortedHistory) {
                         continue
                     }
 
-                    # "Merge" operations on TFS without Edit or Branch is really nothing, and can be ignored - from the perspective of GIT.
-                    if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
+                    <# "Merge" operations on TFS without Edit or Branch is really nothing, and can be ignored if same source/target - from the perspective of GIT and change tracking.
+                    if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)
+                        ) {
                         Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging without Edit/Branch is a NO-OP in GIT" -ForegroundColor Gray
                         # There is nothing to check
                         $qualityCheckNotApplicable = $true
 
                         # Next item!
                         continue
-                    }
+                    } #>
 
                      # "Delete" + "Merge" + "SourceRename" => a file was renamed (and the source file "deleted") originally, there is nothing to track here as there is nothing to do.
                      if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -and 
@@ -1086,7 +1143,13 @@ foreach ($cs in $sortedHistory) {
                     # Source has to exist
                     if ($sourcehash -ne $null -and (Test-Path -path $sourceRelativePath)) {
                         # If file exists in target branch, we need to revert it back to original state
-                        $backupHead = & $git rev-parse HEAD  
+                        if ($sourceBranchName -ne $branchName) {
+                            push-location ..\$sourceBranchName
+                        }
+                        $backupHead = invoke-git rev-parse HEAD
+                        if ($sourceBranchName -ne $branchName) {
+                            pop-location
+                        }
                     }
                     
                     
@@ -1100,7 +1163,7 @@ foreach ($cs in $sortedHistory) {
                         Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
                         $sourceRelativePath = $sourceRelativePath.Replace("\","/")
 
-                        invoke-git checkout -f $sourcehash -- "$sourceRelativePath" | write-verbose
+                        invoke-git checkout -f $sourcehash -- $sourceRelativePath | write-verbose
                         
                         # We need to flip this back for this to work
                         $sourceRelativePath = $sourceRelativePath.Replace("/","\")
@@ -1189,7 +1252,8 @@ foreach ($cs in $sortedHistory) {
           # Add/Edit - Downloading:
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add -or 
                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -or 
-                $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -or # Stand alone (or with sourcerename in changeset) can have modified content...
+                $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Encoding -or  # Easier to just download the state TFS wants this to be, to ensure equal hash
+                $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -or    # Stand alone (or with sourcerename in changeset) can have modified content...
                 $forceAddNoSource ) {
         
                 # Default Commit File action: Edit, Add, Branch without source and so on:
@@ -1240,21 +1304,13 @@ foreach ($cs in $sortedHistory) {
                     
                     $gitLocalName = $relativePath.Replace("\","/").Trim()
 
-
                     $gitLocalName = invoke-git ls-files | ? { $_ -ieq "$gitLocalName" }
 
-
-                    # Flip to linux
-                 
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $gitLocalName - Deleting - Real relative path"
+                    
                     # Remove the file or directory
                     invoke-git rm -f "$gitLocalName" | write-verbose
-
-                    #$ErrorActionPreference = $originalPreference
-                   # if ($out -is [System.Management.Automation.ErrorRecord]) {
-                    #    Write-Host ($out |convertto-json )
-                    #    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File allready deleted/missing. (TFS Supported)" 
-                   # } 
+                
                     $fileDeleted = $true
 
 
@@ -1283,7 +1339,7 @@ foreach ($cs in $sortedHistory) {
                 $qcStatus ="Pass"
                 if (-not $fileDeleted) {
                     if (-not $qualityCheckNotApplicable) {
-                        $tmpFileName = "$env:TEMP\QCFile.tmp"
+                        $tmpFileName = [System.IO.Path]::GetTempFileName()
 
                         # Ensure previous file is not present
                         remove-item -path $tmpFileName -force -erroraction SilentlyContinue
@@ -1377,6 +1433,7 @@ foreach ($cs in $sortedHistory) {
         gitGCCounter = $gitGCCounter
         branchHashTracker = $branchHashTracker
         branches = $branches
+        processingChangesetId = $processingChangesetId
     } | convertto-json | out-file (join-path $targetRoot "laststate.json")
 
     write-host "state file saved"
