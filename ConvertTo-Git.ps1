@@ -341,7 +341,7 @@ function Invoke-Git {
           
             }
             # fatal and others
-            Write-Error $message -ErrorAction Stop
+            throw($message)
         }
     }
 
@@ -368,11 +368,11 @@ function Get-TfsItem {
     ) 
 
     if ($tfsConnection -eq $null) {
-        write-error "Requires TFS Connection" -ErrorAction stop
+        throw("Requires TFS Connection")
     }
 
     if (-not $Item.StartsWith("$") -and $Project -eq $null) {
-        write-error "Unrooted relative paths are not supported, either prefix Item or specify Project" -ErrorAction stop
+        throw("Unrooted relative paths are not supported, either prefix Item or specify Project")
     }
 
     if (-not $Item.StartsWith("$")) {
@@ -499,7 +499,7 @@ function Get-SourceItem {
     }  else {
 
         # No source solution found, shouldnt happen
-        Write-Error "Get-SourceItem: Scan failed to find $($Source.RelativePath) for changeset range $($Source.ChangesetId)-$($Source.ChangesetIdFrom)" -ErrorAction Stop
+        throw("Get-SourceItem: Scan failed to find $($Source.RelativePath) for changeset range $($Source.ChangesetId)-$($Source.ChangesetIdFrom)")
     }
 
 
