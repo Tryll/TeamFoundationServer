@@ -313,7 +313,7 @@ function Invoke-Git {
     $gitOutput = $stdErr + $stdOut
 
     $gitOutput = $gitOutput | % { 
-            [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding("DOS-862").GetBytes($_)) 
+            [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding("IBM865").GetBytes($_)) #DOS-862
     }
    
     # Powershell has a problem with args and string passing - Pipes in PS reduces @("asd") to just "asd"
@@ -533,9 +533,9 @@ function Commit-ChangesetToGit {
         
         # Enter source branch for early commit
     
+       
         invoke-git status  | Write-Host
-
-        # Since everything is explicit, this should not be required - and it is slow on large repos
+        
         invoke-git add -vfA | Write-Host
      
         # Prepare commit message, handle any type of comments and special chars
@@ -1316,8 +1316,8 @@ foreach ($cs in $sortedHistory) {
                     
                     $gitLocalName = $relativePath.Replace("\","/").Trim()
                     $dir = [System.IO.Path]::GetDirectoryName($gitLocalName)
-                    $dir = $dir.Replace("\","/")
-
+                    $dir = $dir.Replace("\","/")+"/"
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] '$dir' '$gitLocalName' - Deleting - Searching for real relative path"
                     $gitLocalName = invoke-git ls-files "$dir" | ? { $_ -ieq "$gitLocalName" }
 
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $gitLocalName - Deleting - Real relative path"
