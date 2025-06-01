@@ -161,6 +161,8 @@ param(
 
 $global:GIT_PATH = $git
 
+# Setting code page 
+#chcp 437
 
 # Support functions
 # ********************************
