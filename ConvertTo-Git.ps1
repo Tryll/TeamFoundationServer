@@ -160,6 +160,10 @@ param(
 )
 
 $global:GIT_PATH = $git
+
+# Setting code page 
+chcp 437
+
 # Support functions
 # ********************************
 #region SupportFunctions
@@ -313,7 +317,7 @@ function Invoke-Git {
     $gitOutput = $stdErr + $stdOut
 
     $gitOutput = $gitOutput | % { 
-            [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding("IBM865").GetBytes($_)) #DOS-862
+            [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding("IBM865").GetBytes($_)) # chcp 437, DOS-862
     }
    
     # Powershell has a problem with args and string passing - Pipes in PS reduces @("asd") to just "asd"
