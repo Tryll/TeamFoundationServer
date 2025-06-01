@@ -461,9 +461,23 @@ function Get-SourceItem {
             $tryHash = $branchHashTracker["$($Source.BranchName)-$i"]
 
             Write-Verbose "Get-SourceItem: Looking in $($Source.BranchName)-$i : $tryHash"
-        
-            # Check if file is changed and part of this commit
+
+            # First look in commit, fastest
             $lastFoundFile = invoke-git show --name-only $tryHash | ? { $_ -ieq "$gitLocalName" }
+            if ($lastFoundFile -eq $null) {
+
+                # Then look in tree with direct path (faster than full recursive scan)
+                Write-Verbose "Get-SourceItem: Direct tree check in $($Source.BranchName)-$i : $tryHash"
+                $lastFoundFile = invoke-git ls-tree --name-only $tryHash -- "$gitLocalName"
+                if ($lastFoundFile -eq $null) {
+                    # Finally, full tree scan if direct path fails (handles case sensitivity issues)
+                    Write-Verbose "Get-SourceItem: Tree-scanning in $($Source.BranchName)-$i : $tryHash"
+                    $lastFoundFile = invoke-git ls-tree -r --name-only $tryHash | ? { $_ -ieq "$gitLocalName" }
+                }
+
+            }
+
+
             if ($lastFoundFile -ne $null ) {
                 $lastFoundIn=$i
                 # Break on first hit
@@ -490,7 +504,7 @@ function Get-SourceItem {
 
     if ($lastFoundIn -ne 0) {
         # using lastFoundFile to match case:
-        Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" last changed in TFS-$lastFoundIn"
+        Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" in TFS-$lastFoundIn"
 
         $Source.ChangesetId = $lastFoundIn
         # reverting back to windows format
