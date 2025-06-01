@@ -535,6 +535,7 @@ function Commit-ChangesetToGit {
     
         invoke-git status  | Write-Host
 
+        # Since everything is explicit, this should not be required - and it is slow on large repos
         invoke-git add -vfA | Write-Host
      
         # Prepare commit message, handle any type of comments and special chars
