@@ -391,6 +391,32 @@ function Get-TfsItem {
 
 }
 
+function Get-GitItem {
+    param( [Parameter(Mandatory=$true)]
+            $fileName,
+
+            [Parameter(Mandatory=$false)]
+            $hash="HEAD") 
+
+
+    $gitLocalName = $fileName.Replace("\","/")
+     # First look in commit, fastest - identify git local case
+    $found = invoke-git show --name-only $hash | ? { $_ -ieq "$gitLocalName" }
+    if ($found -eq $null) {
+
+        # Then look in tree with direct path (faster than full recursive scan)
+        $found = invoke-git ls-tree --name-only $hash -- "$gitLocalName"
+        if ($found -eq $null) {
+            # Finally, full tree scan if direct path fails (handles case sensitivity issues)
+            Write-Verbose "Get-GitItem: Tree-scanning in $hash (slow)"
+            $found = invoke-git ls-tree -r --name-only $hash | ? { $_ -ieq "$gitLocalName" }
+        }
+
+    }
+
+    return $found
+}
+
 
 function Get-SourceItem {
     param($change, $changesetId, $currentBranchName)
@@ -463,20 +489,8 @@ function Get-SourceItem {
             Write-Verbose "Get-SourceItem: Looking in $($Source.BranchName)-$i : $tryHash"
 
             # First look in commit, fastest
-            $lastFoundFile = invoke-git show --name-only $tryHash | ? { $_ -ieq "$gitLocalName" }
-            if ($lastFoundFile -eq $null) {
-
-                # Then look in tree with direct path (faster than full recursive scan)
-                Write-Verbose "Get-SourceItem: Direct tree check in $($Source.BranchName)-$i : $tryHash"
-                $lastFoundFile = invoke-git ls-tree --name-only $tryHash -- "$gitLocalName"
-                if ($lastFoundFile -eq $null) {
-                    # Finally, full tree scan if direct path fails (handles case sensitivity issues)
-                    Write-Verbose "Get-SourceItem: Tree-scanning in $($Source.BranchName)-$i : $tryHash"
-                    $lastFoundFile = invoke-git ls-tree -r --name-only $tryHash | ? { $_ -ieq "$gitLocalName" }
-                }
-
-            }
-
+            $lastFoundFile = get-gititem -fileName $gitLocalName -hash $tryHash 
+            
 
             if ($lastFoundFile -ne $null ) {
                 $lastFoundIn=$i
@@ -1008,6 +1022,7 @@ foreach ($cs in $sortedHistory) {
         $itemPath = $changeItem.ServerItem
         $processedItems++
         $forceAddNoSource = $false
+        $ensureDeleted = $false
         $fileDeleted = $false
         $qualityCheckNotApplicable = $false
 
@@ -1246,9 +1261,17 @@ foreach ($cs in $sortedHistory) {
                     # Let it continue to Edit!
                 } else {
 
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Without source, addding"
-                    # Continue processing as normal file
-                    $forceAddNoSource = $true
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Without source"
+
+                    if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Without source, deleting"
+                        $ensureDeleted = $true
+                    } else {
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Without source, adding"
+                        # Continue processing as normal file
+                        $forceAddNoSource = $true
+                    }
+                    
                 }
               
             }
@@ -1328,11 +1351,17 @@ foreach ($cs in $sortedHistory) {
 
                 if (Test-Path -path $relativePath -PathType Leaf) {
                     
-                    $gitLocalName = $relativePath.Replace("\","/").Trim()
+                    $gitLocalName = get-gititem -fileName $relativePath
+
+                 <#  $gitLocalName = $relativePath.Replace("\","/").Trim()
                     $dir = [System.IO.Path]::GetDirectoryName($gitLocalName)
                     $dir = $dir.Replace("\","/")+"/"
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] '$dir' '$gitLocalName' - Deleting - Searching for real relative path"
                     $gitLocalName = invoke-git ls-files "$dir" | ? { $_ -ieq "$gitLocalName" }
+                  #>
+                    if ($gitLocalName -eq $null) {
+                        throw "File not found to delete"
+                    }
 
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $gitLocalName - Deleting - Real relative path"
                     
@@ -1343,7 +1372,11 @@ foreach ($cs in $sortedHistory) {
 
 
                 } else {
-                    throw "File allready missing?"
+                    if ($ensureDeleted) {
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $gitLocalName - Deleting - Already deleted (accept)"
+                    } else {
+                        throw "File already missing?"
+                    }
                 }
                 
             }
