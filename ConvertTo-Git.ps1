@@ -294,9 +294,13 @@ function Invoke-Git {
    
     $gitPath = if ($global:GIT_PATH) { $global:GIT_PATH } else { if ($ENV:GIT_PATH) { $ENV:GIT_PATH } else { "git" } }
 
+    # Powershell has an inconsistency problem where piped arrays with single elements are returned as the element
     # Escapes {} with \ for \{ \} in filepaths
-    $escapedArgs = $args | % { $_ -replace '([{}])', '\$1' }
-   
+    $escapedArgs =@()
+    foreach ($arg in $args) {
+        $escapedArgs += $arg -replace '([{}])', '\$1'
+    }
+
     $originalPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     # Powershell has alot of problems providing both stderr and stdout
@@ -312,7 +316,7 @@ function Invoke-Git {
             [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding("DOS-862").GetBytes($_)) 
     }
    
-    # Pipes in PS reduces @("asd") to just "asd"
+    # Powershell has a problem with args and string passing - Pipes in PS reduces @("asd") to just "asd"
     if ($gitOutput -ne $null -and $gitOutput -is [String]) {
         $gitOutput = @($gitOutput)
     }
@@ -853,11 +857,8 @@ $gitGCCounter = 0
 $branchHashTracker = @{}
 $processingChangesetId = 0
 
-if ($Continue) {
-    if (-not (Test-Path "laststate.json")) {
-        throw "Unable to continue from previous run, laststate.json missing"
-    }
-
+if ($Continue -and (Test-Path "laststate.json")) {
+    
     Add-Type -AssemblyName System.Web.Extensions
     $serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
     $state = $serializer.DeserializeObject((get-content laststate.json ))
