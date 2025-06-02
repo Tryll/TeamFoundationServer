@@ -468,6 +468,8 @@ function Get-SourceItem {
         Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] $($Source.RelativePath) found in current path"
         $Source.ChangesetId = $changesetId
         $Source.Hash = $null
+
+        $Source.RelativePath = (get-gititem -fileName $Source.RelativePath)
         return $Source
     }
 
