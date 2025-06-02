@@ -1201,7 +1201,7 @@ foreach ($cs in $sortedHistory) {
                     # What do we do for branches created in same changeset that we want to copy from here!
 
                     # CHECKOUT from hash, it that exists - else file is local to branch:
-                    if ($sourcehash -ne $null -and $changeItem.DeletionId -eq 0) {
+                    if ($sourcehash -ne $null) { # -and $changeItem.DeletionId -eq 0) {
 
                         #$sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip path seps back
 
@@ -1215,7 +1215,7 @@ foreach ($cs in $sortedHistory) {
                       
                        
                     } else {
-                        if ($changeItem.DeletionId -gt 0) {
+                        <#if ($changeItem.DeletionId -gt 0) {
                               
                                 # Decision: Will not forward merge deleted items, by findit it and removing it.
                                 # This could lead to a problem later when a file is request "undeleted", we'll have to look it up at that time.
@@ -1225,7 +1225,7 @@ foreach ($cs in $sortedHistory) {
                                 # Avoiding move processing
                                 $sourceRelativePath = $relativePath
                                 
-                        } 
+                        } #>
                     }
                     
 
