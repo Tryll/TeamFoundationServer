@@ -1210,7 +1210,9 @@ foreach ($cs in $sortedHistory) {
                         Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
                         $sourceRelativePath = $sourceRelativePath.Replace("\","/")
 
-                        invoke-git checkout -f $sourcehash -- $sourceRelativePath | write-verbose
+                     
+                        invoke-git checkout -f $sourcehash -- "$sourceRelativePath" | write-verbose
+              
                         
                         # We need to flip this back for this to work
                         $sourceRelativePath = $sourceRelativePath.Replace("/","\")
