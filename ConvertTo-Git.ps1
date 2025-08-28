@@ -251,7 +251,7 @@ function Get-ItemBranch {
 
     # Default to main
     if ($path -eq  '$') {
-        Write-Verbose "Get-ItemBranch: Defaulting to main branch for $path at TFS-$changesetId"
+        # Write-Verbose "Get-ItemBranch: Defaulting to main branch for $path at TFS-$changesetId"
         return "$projectPath/$projectBranch"
     }
 
@@ -647,6 +647,9 @@ $env:GIT_CONFIG_GLOBAL = Join-Path -path (pwd) -childpath ".gitconfig"
 
 & $git config --global --add safe.directory '*'
 
+# Rename normal .gitignore (incase that is part of existing tfs structure)
+& $git config --global core.excludesFile .tfs-gitignore
+
 # Create the first main branch folder and initialize Git
 $projectBranch = "main"
 
@@ -673,7 +676,10 @@ if ($FromChangesetId -gt 0) {
         throw "Unable to continue from previous run, laststate.json missing"
     }
 
-    $state = get-content laststate.json  | convertfrom-json  -AsHashtable
+    Add-Type -AssemblyName System.Web.Extensions
+    $serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+    $state = $serializer.DeserializeObject((get-content laststate.json ))
+  
     $processedChangesets = $state.processedChangesets
     $processedItems = $state.processedItems
     $gitGCCounter = $state.gitGCCounter
@@ -735,6 +741,7 @@ $sortedHistory = $history | Sort-Object CreationDate
 $totalChangesets = $sortedHistory.Count
 Write-Host "Found $totalChangesets changesets - processing from oldest to newest" -ForegroundColor Green
 
+$totalChangesets +=$FromChangesetId
 
 try {   # Finally block to save state.
 
@@ -831,11 +838,10 @@ foreach ($cs in $sortedHistory) {
         push-location $branchName
         $branchChanges[$branchName] = $true
 
-    
 
         try { #  try/finally for pop-location and  quality control
 
-        
+    
 
 
             # Retrieve files from a Source changeset, and prepare for other actions later
@@ -1113,6 +1119,8 @@ foreach ($cs in $sortedHistory) {
                 continue
                 
             }
+
+      
         
           # Add/Edit - Downloading:
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add -or 
