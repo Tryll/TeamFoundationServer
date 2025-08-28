@@ -125,9 +125,11 @@ param(
     [Parameter(Mandatory=$false)]
     [int]$FromChangesetId = 0,
 
-    [Parameter(Mandatory=$false)]
-    [string]$git = "git",
+    [Parameter(mandatory=$false)]
+    [switch]$Continue,
 
+    [Parameter(Mandatory=$false)]
+    [string]$git = (if ([string]::IsNullOrEmpty($ENV:GIT_PATH)) { "git" } else { $ENV:GIT_PATH }),
 
     # Quality control effectively checks every iteration of a file, this will slow down the process, but ensure the files are correct.
     [Parameter(Mandatory=$false)]
@@ -156,7 +158,10 @@ param(
 
 )
 
+$global:GIT_PATH = $git
 
+# Setting code page 
+#chcp 437
 
 # Support functions
 # ********************************
@@ -222,13 +227,10 @@ function Add-GitBranch {
     # Creates orphan branches as default, from sourceName which is always main.
     # If this logic works, we can reduce complexity in this function.
     # Automatically creates branch with name "branchName"
-    git worktree add --orphan "../$branchName" | write-host
-    $succeeded = $?
-    if (-not $succeeded) {
-        throw ("Add-GitBranch: Work tree creation failed, to long paths? ")
-    }
+    git worktree add -f --orphan "../$branchName" | write-verbose
 
     pop-location
+
 
     return $branches[$fromContainer]
 }
@@ -277,15 +279,145 @@ function Compare-Files {
     }
     
     # Get full paths to avoid any path-related issues
-    $fullPath1 = (Resolve-Path $File1).Path
-    $fullPath2 = (Resolve-Path $File2).Path
+    #$fullPath1 = (Resolve-Path $File1).Path
+    #$fullPath2 = (Resolve-Path $File2).Path
     
+    $fullPath1 = $File1.Replace("\","/")
+    $fullPath2 = $File2.Replace("\","/")
     # Use git diff with -w to ignore all whitespace differences (including BOMs)
-    $result = & $git diff --no-index --exit-code -w $fullPath1 $fullPath2 2>&1
-    
+    invoke-git diff --no-index --exit-code -w "$fullPath1" "$fullPath2"
+   
     # Git returns exit code 0 if files are identical, 1 if different
     # Return $true if files are the same (ignoring BOMs)
     return ($LASTEXITCODE -eq 0)
+}
+
+
+function Invoke-Git {
+   
+    $gitPath = if ($global:GIT_PATH) { $global:GIT_PATH } else { if ($ENV:GIT_PATH) { $ENV:GIT_PATH } else { "git" } }
+
+    # Powershell has an inconsistency problem where piped arrays with single elements are returned as the element
+    # Escapes {} with \ for \{ \} in filepaths
+    $escapedArgs =@()
+    foreach ($arg in $args) {
+        $escapedArgs += $arg -replace '([{}])', '\$1'
+    }
+
+    $originalPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    # Powershell has alot of problems providing both stderr and stdout
+    $stdErr =@()
+    $stdOut = @()
+       
+    & $gitPath @escapedArgs 2>&1 | % { if($_ -is [String]) { $stdOut+=$_ } else { $stdErr+=$_.Exception.Message} }
+    $ErrorActionPreference= $originalPreference
+
+    $gitOutput = $stdErr + $stdOut
+
+    $gitOutput = $gitOutput | % { 
+            [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding("IBM865").GetBytes($_)) # chcp 437, DOS-862
+    }
+   
+    # Powershell has a problem with args and string passing - Pipes in PS reduces @("asd") to just "asd"
+    if ($gitOutput -ne $null -and $gitOutput -is [String]) {
+        $gitOutput = @($gitOutput)
+    }
+
+    if ($gitOutput -ne $null){
+        $message =  $gitOutput[0]
+        if ($message.ToLower().StartsWith("warning")) {
+            Write-Warning $message
+        } 
+
+        if ($message.ToLower().StartsWith("fatal") -or $message.ToLower().StartsWith("error")) {
+            if (![String]::IsNullOrEmpty($message) -and (
+                    $message.Trim() -eq "fatal: unable to write new index file"  -or
+                    $message.Trim().EndsWith("Resource temporarily unavailable") -or
+                    $message.Trim() -eq "fatal: failed to run pack-refs"  
+                    )) {
+                Write-Warning "Retrying due to $message"
+                # Alot of failes doing this manually..
+                #invoke-git gc | write-verbose
+             
+                return Invoke-Git @args
+          
+            }
+            # fatal and others
+            throw($message)
+        }
+    }
+
+    return $gitOutput  
+}
+
+function Get-TfsItem {
+    param(
+        [Parameter(Mandatory=$true)]
+        [int]
+        $ChangesetId,
+
+        [Parameter(Mandatory=$true)]
+        [string]
+        $Item,
+
+        [Parameter(Mandatory=$false)]
+        [string]
+        $Project = $global:TFSProject,
+
+        [Parameter(Mandatory=$false)]
+        [Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer]
+        $tfsConnection = $global:TFSConnection
+    ) 
+
+    if ($tfsConnection -eq $null) {
+        throw("Requires TFS Connection")
+    }
+
+    if (-not $Item.StartsWith("$") -and $Project -eq $null) {
+        throw("Unrooted relative paths are not supported, either prefix Item or specify Project")
+    }
+
+    if (-not $Item.StartsWith("$")) {
+        $Item = join-path -path $Project -childpath $Item
+        if (-not $Item.StartsWith("$")) {
+            $Item = "$/$Item"
+        }
+    }
+
+    $changeset = $tfsConnection.GetChangeset($ChangesetId)
+
+    # Ensure path is TFS styled
+    $Item = $Item.Replace("\","/")
+
+    return $changeset.changes | ? { $_.Item.ServerItem -ieq $Item}
+
+}
+
+function Get-GitItem {
+    param( [Parameter(Mandatory=$true)]
+            $fileName,
+
+            [Parameter(Mandatory=$false)]
+            $hash="HEAD") 
+
+
+    $gitLocalName = $fileName.Replace("\","/")
+     # First look in commit, fastest - identify git local case
+    $found = invoke-git show --name-only $hash | ? { $_ -ieq "$gitLocalName" }
+    if ($found -eq $null) {
+
+        # Then look in tree with direct path (faster than full recursive scan)
+        $found = invoke-git ls-tree --name-only $hash -- "$gitLocalName"
+        if ($found -eq $null) {
+            # Finally, full tree scan if direct path fails (handles case sensitivity issues)
+            Write-Verbose "Get-GitItem: Tree-scanning in $hash (slow)"
+            $found = invoke-git ls-tree -r --name-only $hash | ? { $_ -ieq "$gitLocalName" }
+        }
+
+    }
+
+    return $found
 }
 
 
@@ -327,7 +459,7 @@ function Get-SourceItem {
     # Ensure we have Window format paths
     $Source.RelativePath = $Source.Path.Replace($Source.Branch.TfsPath, $Source.Branch.Rewrite).TrimStart('/').Replace('/', '\')
 
-    Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] with rewrite '$($Source.Branch.Rewrite)' for $($Source.RelativePath)"
+    Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] [$($Source.Hash)] with rewrite '$($Source.Branch.Rewrite)' for $($Source.RelativePath)"
 
     # Scan current first, as this will not be possible to git history scan if in current - Check if file is in current folder structure (could use git status file here)
     # This is what TFS does, but it should really have picked from previous.
@@ -335,6 +467,8 @@ function Get-SourceItem {
         Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] $($Source.RelativePath) found in current path"
         $Source.ChangesetId = $changesetId
         $Source.Hash = $null
+
+        $Source.RelativePath = (get-gititem -fileName $Source.RelativePath)
         return $Source
     }
 
@@ -343,53 +477,142 @@ function Get-SourceItem {
     }
 
     # Scan in range if required
-    if ($Source.ChangesetId -ne $Source.ChangesetIdFrom) {
-        #Write-Verbose "Get-SourceItem: Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
-        $lastFoundIn=0
-        $lastFoundFile=""
-        $gitLocalName = $Source.RelativePath.Replace("\","/")
 
-        # Iterate from Top to Bottom, exit on first hit as this will be the newest change
-        for($i= $Source.ChangesetId; $i -ge $Source.ChangesetIdFrom; $i--) {
+    #Write-Verbose "Get-SourceItem: Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
+    $lastFoundIn=0
+    $lastFoundFile=""
+    $gitLocalName = $Source.RelativePath.Replace("\","/")
 
-            # Check if $i/"changesetid" is valid for this branch as a previous commit
-            if ($branchHashTracker.ContainsKey("$($Source.BranchName)-$i")) {
-                # Fetch hash from previous commit
-                $tryHash = $branchHashTracker["$($Source.BranchName)-$i"]
+    # Iterate from Top to Bottom, exit on first hit as this will be the newest change
+    for($i= $Source.ChangesetId; $i -ge $Source.ChangesetIdFrom; $i--) {
 
-                Write-Verbose "Get-SourceItem: Looking in $($Source.BranchName)-$i : $tryHash"
+        # Check if $i/"changesetid" is valid for this branch as a previous commit
+        if ($branchHashTracker.ContainsKey("$($Source.BranchName)-$i")) {
+            # Fetch hash from previous commit
+            $tryHash = $branchHashTracker["$($Source.BranchName)-$i"]
+
+            Write-Verbose "Get-SourceItem: Looking in $($Source.BranchName)-$i : $tryHash"
+
+            # First look in commit, fastest
+            $lastFoundFile = get-gititem -fileName $gitLocalName -hash $tryHash 
             
-                # Check if file is changed and part of this commit
-                $lastFoundFile = & $git show --name-only $tryHash 2>&1 | ? { $_ -ieq "$gitLocalName" }
-                if ($lastFoundFile -ne $null ) {
-                    $lastFoundIn=$i
-                    # Break on first hit
-                    break
-                } else {
-                    # Write-Verbose "Did not find $gitLocalName in this:"
-                    # & $git show --name-only $tryHash 2>&1  | write-host
-                    
+
+            if ($lastFoundFile -ne $null ) {
+                $lastFoundIn=$i
+                # Break on first hit
+                break
+            } else {
+                
+                # TFS supports references to deleted files, isnt that marvelous.
+                # We need to check if we are referencing a deleted file, then accept and return empty source as it is impossible to merge from a deleted commit
+                $previous = get-tfsitem -changesetid $i -item $Source.RelativePath
+                if ($previous -ne $null -and $previous.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+                    Write-Verbose "Get-SourceItem: [$($Source.BranchName)] [TFS-$i] $($Source.RelativePath) Found deleted in previous TFS changeset."
+                    # Returns empty Source
+                    $Source.ChangesetId = $i
+                    $Source.Hash = $null
+                    return $Source
                 }
+
+                # Continue searching
+
             }
         }
-        if ($lastFoundIn -ne 0) {
-            # using lastFoundFile to match case:
-            Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" last changed in TFS-$lastFoundIn"
-
-            $Source.ChangesetId = $lastFoundIn
-            # reverting back to windows format
-            $Source.RelativePath = $lastFoundfile.Replace("/","\") 
-            $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]      
-        }  else {
-            Write-Verbose "Get-SourceItem: Scan failed to find $($Source.RelativePath) for changeset range $($Source.ChangesetId)-$($Source.ChangesetIdFrom)"
-        }
     }
-    
+
+
+    if ($lastFoundIn -ne 0) {
+        # using lastFoundFile to match case:
+        Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" in TFS-$lastFoundIn"
+
+        $Source.ChangesetId = $lastFoundIn
+        # reverting back to windows format
+        $Source.RelativePath = $lastFoundfile.Replace("/","\") 
+        $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]      
+    }  else {
+
+        # No source solution found, shouldnt happen
+        throw("Get-SourceItem: Scan failed to find $($Source.RelativePath) for changeset range $($Source.ChangesetId)-$($Source.ChangesetIdFrom)")
+    }
+
 
     Write-Verbose "Get-SourceItem: [$($Source.BranchName)] [$($Source.ChangesetId)-$($Source.ChangesetIdFrom)] [$($Source.Hash)] $($Source.RelativePath)"
 
  
     return $Source
+}
+
+
+function Commit-ChangesetToGit {
+    param(
+        [Microsoft.TeamFoundation.VersionControl.Client.Changeset]
+        $changeset,
+
+        [string]
+        $branchName
+    )
+
+    try {
+        push-location $branchName
+
+        # Set environment variables for commit author and date
+        $env:GIT_AUTHOR_NAME = $changeset.OwnerDisplayName
+        $env:GIT_AUTHOR_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
+        $env:GIT_AUTHOR_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
+        $env:GIT_COMMITTER_NAME = $changeset.OwnerDisplayName
+        $env:GIT_COMMITTER_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
+        $env:GIT_COMMITTER_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
+
+        
+        # Enter source branch for early commit
+    
+       
+        invoke-git status  | Write-Host
+        
+        invoke-git add -vfA | Write-Host
+     
+        # Prepare commit message, handle any type of comments and special chars
+        $commentTmpFile = [System.IO.Path]::GetTempFileName()
+        "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]" | Out-File -FilePath $commentTmpFile -Encoding ASCII -NoNewline
+            
+        $currentHash = $null
+        try {
+             $currentHash = invoke-git rev-parse HEAD
+        } catch {
+            # first commit can report missing HEAD
+        }          
+
+        # Handle special  commit message chars:
+        invoke-git commit -F $commentTmpFile --allow-empty | Write-Host
+
+    
+        
+        $hash = invoke-git rev-parse HEAD  
+        
+        if ($currentHash -ne $null -and $hash -eq $currentHash) {
+            throw "Commit failed, stopping for review"
+        }
+
+        Remove-Item -Path $commentTmpFile -force
+
+        $branchHashTracker["$branchName-$changesetId"] =  $hash
+        Write-Host "[TFS-$changesetId] [$branchName] [$hash] Comitted" -ForegroundColor Gray
+      
+       
+        pop-location #sourceBranchName
+
+
+    } finally {
+
+        # Clean up environment variables
+        Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_AUTHOR_EMAIL -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_COMMITTER_NAME -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
+    }
+
 }
 
 function Sort-TfsChangeItems {
@@ -614,7 +837,7 @@ try {
     $tfsServer.Authenticate()
     
     $vcs = $tfsServer.GetService([Microsoft.TeamFoundation.VersionControl.Client.VersionControlServer])
-    
+    $global:TFSConnection = $vcs
     Write-Host "Connected successfully" -ForegroundColor Green
 } catch {
     Write-Host "Error connecting to TFS: $_" -ForegroundColor Red
@@ -631,24 +854,27 @@ if ($project -eq $null) {
 }
 $projectPath=$project.ServerItem
 Write-Host "Found project $projectPath"
+$global:TFSProject = $projectPath
 
 $env:GIT_CONFIG_GLOBAL = Join-Path -path (pwd) -childpath ".gitconfig"
 # Default Git settings
+
 & $git config --global user.email "tfs@git"
+
 & $git config --global user.name "TFS migration"
 
 & $git config --global core.autocrlf false
+
 & $git config --global core.longpaths true
 # Old TFS checkins are case-insensitive, so we need to ignore case.
+
 & $git config --global core.ignorecase true
 
 # Disable special unicode file name treatments
 & $git config --global core.quotepath false
 
-& $git config --global --add safe.directory '*'
+& $git config --global --add safe.directory "*"
 
-# Rename normal .gitignore (incase that is part of existing tfs structure)
-& $git config --global core.excludesFile .tfs-gitignore
 
 # Create the first main branch folder and initialize Git
 $projectBranch = "main"
@@ -671,11 +897,10 @@ $processedChangesets = 0
 $processedItems = 0
 $gitGCCounter = 0
 $branchHashTracker = @{}
-if ($FromChangesetId -gt 0) {
-    if (-not (Test-Path "laststate.json")) {
-        throw "Unable to continue from previous run, laststate.json missing"
-    }
+$processingChangesetId = 0
 
+if ($Continue -and (Test-Path "laststate.json")) {
+    
     Add-Type -AssemblyName System.Web.Extensions
     $serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
     $state = $serializer.DeserializeObject((get-content laststate.json ))
@@ -685,7 +910,19 @@ if ($FromChangesetId -gt 0) {
     $gitGCCounter = $state.gitGCCounter
     $branchHashTracker = $state.branchHashTracker
     $branches  = $state.branches
+    if ($state.processingChangesetId -gt 0) {
+        $FromChangesetId  = $state.processingChangesetId
+    }
+
+    Write-Host "Rolling back to prepare for $FromChangesetId"
+    push-location $projectBranch
+    git reset --hard HEAD
+    git clean -fd
+    git gc
+    pop-location
+    Write-Host "Resuming processing from $FromChangesetId"
 }
+
 
 
 # New Repository or Continue:
@@ -783,12 +1020,14 @@ foreach ($cs in $sortedHistory) {
         $changeCounter++
         $changeItem = $change.Item
         $changesetId = [Int]::Parse($changeItem.ChangesetId)
+        $processingChangesetId = $changesetId
         $changeType = [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]($change.ChangeType)
         $itemType = [Microsoft.TeamFoundation.VersionControl.Client.ItemType]($changeItem.ItemType)
         $itemId= [Int]::Parse($changeItem.ItemId)
         $itemPath = $changeItem.ServerItem
         $processedItems++
         $forceAddNoSource = $false
+        $ensureDeleted = $false
         $fileDeleted = $false
         $qualityCheckNotApplicable = $false
 
@@ -835,6 +1074,7 @@ foreach ($cs in $sortedHistory) {
 
         # Enter Branch:
         Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - Processing" -ForegroundColor Cyan
+
         push-location $branchName
         $branchChanges[$branchName] = $true
 
@@ -882,15 +1122,16 @@ foreach ($cs in $sortedHistory) {
                         continue
                     }
 
-                    # "Merge" operations on TFS without Edit or Branch is really nothing, and can be ignored - from the perspective of GIT.
-                    if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
+                    <# "Merge" operations on TFS without Edit or Branch is really nothing, and can be ignored if same source/target - from the perspective of GIT and change tracking.
+                    if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)
+                        ) {
                         Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging without Edit/Branch is a NO-OP in GIT" -ForegroundColor Gray
                         # There is nothing to check
                         $qualityCheckNotApplicable = $true
 
                         # Next item!
                         continue
-                    }
+                    } #>
 
                      # "Delete" + "Merge" + "SourceRename" => a file was renamed (and the source file "deleted") originally, there is nothing to track here as there is nothing to do.
                      if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -and 
@@ -923,57 +1164,21 @@ foreach ($cs in $sortedHistory) {
                  
                         pop-location # Exit current branch
 
-                        try {
-                            # Set environment variables for commit author and date
-                            $env:GIT_AUTHOR_NAME = $changeset.OwnerDisplayName
-                            $env:GIT_AUTHOR_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
-                            $env:GIT_AUTHOR_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
-                            $env:GIT_COMMITTER_NAME = $changeset.OwnerDisplayName
-                            $env:GIT_COMMITTER_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
-                            $env:GIT_COMMITTER_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
-                    
-                          
-                            # Enter source branch for early commit
-                            push-location $sourceBranchName
-                            & $git status 2>&1 | Write-Host
-
-                            & $git add -A 2>&1 | Write-Host
-                            $commitMessage = "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]"
-
-                            $originalPreference = $ErrorActionPreference
-                            $ErrorActionPreference = 'Continue'
-                            & $git commit -m $commitMessage --allow-empty 2>&1 | Write-Host
-                            $sourcehash = & $git rev-parse HEAD
-                            $ErrorActionPreference = $originalPreference
-
-                            $branchHashTracker["$sourceBranchName-$changesetId"] = $sourcehash
-                            Write-Host "[TFS-$changesetId] [$sourceBranchName] [$sourcehash] Comitted" -ForegroundColor Gray
-
-                            pop-location #sourceBranchName
-                 
-                            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] Commit updated!" -ForegroundColor Gray
-          
+                        Commit-ChangesetToGit -Changeset $changeset -branchName $sourceBranchName
                         
+                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] Commit updated!" -ForegroundColor Gray
+          
+                      
+                      
+                        # Reenter branch
+                        push-location $branchName
 
-                        } finally {
-                    
-                            # Clean up environment variables
-                            Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
-                            Remove-Item Env:\GIT_AUTHOR_EMAIL -ErrorAction SilentlyContinue
-                            Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
-                            Remove-Item Env:\GIT_COMMITTER_NAME -ErrorAction SilentlyContinue
-                            Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
-                            Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
-                        }
 
                         # Source branch dont need changeset finalization commit.
                         # IF this comes again, we'll overwrite branchHashTracker and be unable to refer to earlier commits from tfs.
                         # Expecting TFS to submitt its changes in sequence, so that this does not happen!
                         $branchChanges.Remove($sourceBranchName)
                         
-                        # Reenter branch
-                        push-location $branchName
-
                     }
                     
 
@@ -984,60 +1189,36 @@ foreach ($cs in $sortedHistory) {
                     # Source has to exist
                     if ($sourcehash -ne $null -and (Test-Path -path $sourceRelativePath)) {
                         # If file exists in target branch, we need to revert it back to original state
-                        $backupHead = & $git rev-parse HEAD  
+                        if ($sourceBranchName -ne $branchName) {
+                            push-location ..\$sourceBranchName
+                        }
+                        $backupHead = invoke-git rev-parse HEAD
+                        if ($sourceBranchName -ne $branchName) {
+                            pop-location
+                        }
                     }
                     
                     
                     # What do we do for branches created in same changeset that we want to copy from here!
 
                     # CHECKOUT from hash, it that exists - else file is local to branch:
-                    if ($sourcehash -ne $null -and $changeItem.DeletionId -eq 0) {
-
-                        # Try to find correct file case from git commit:
-                        $flipped=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
-                        $sourceRelativePath = & $git show --name-only $sourcehash 2>&1 | ? { $_ -ieq "$flipped" }
-
-                        # The file was not found as part of the changeset, attempting to find from commit tree
-                        if ([string]::IsNullOrEmpty($sourceRelativePath)) {
-                            Write-Verbose "$flipped was not found in CHANGES for hash $sourcehash, checking if file exists in tree."
-                            
-                            # Try to get exact case from the commit tree
-                            $sourceRelativePath = & $git ls-tree -r --name-only $sourcehash 2>&1 | ? { $_ -ieq "$flipped" }
-                            
-                            if ([string]::IsNullOrEmpty($sourceRelativePath)) {
-                                Write-Verbose "$sourceRelativePath does not exist at hash $sourcehash."
-                                throw "File reference not found."
-                            }
-                        }
-
+                    if ($sourcehash -ne $null) { # -and $changeItem.DeletionId -eq 0) {
 
                         #$sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip path seps back
 
                         Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
+                        $sourceRelativePath = $sourceRelativePath.Replace("\","/")
 
-                        $originalPreference = $ErrorActionPreference
-                        $ErrorActionPreference = 'Continue'
-                        $out=& $git checkout -f $sourcehash -- "$sourceRelativePath" 2>&1
-                        $ErrorActionPreference = $originalPreference
-
+                     
+                        invoke-git checkout -f $sourcehash -- "$sourceRelativePath" | write-verbose
+              
+                        
                         # We need to flip this back for this to work
                         $sourceRelativePath = $sourceRelativePath.Replace("/","\")
                       
-                        if ($out -is [System.Management.Automation.ErrorRecord]) {
-
-                            write-host ($out |convertto-json)
-                            $status = & $git show --name-only $sourcehash 2>&1
-                            
-                            Write-verbose ($changeItem | convertto-json)
-                            Write-Verbose "Something whent wrong with git checkout [$sourcehash] $sourceRelativePath"
-
-                            throw ($out)
-
-                          
-                        }
                        
                     } else {
-                        if ($changeItem.DeletionId -gt 0) {
+                        <#if ($changeItem.DeletionId -gt 0) {
                               
                                 # Decision: Will not forward merge deleted items, by findit it and removing it.
                                 # This could lead to a problem later when a file is request "undeleted", we'll have to look it up at that time.
@@ -1047,7 +1228,7 @@ foreach ($cs in $sortedHistory) {
                                 # Avoiding move processing
                                 $sourceRelativePath = $relativePath
                                 
-                        } 
+                        } #>
                     }
                     
 
@@ -1067,19 +1248,13 @@ foreach ($cs in $sortedHistory) {
                         $relativePath = $relativePath.Replace("\","/")
 
                         Write-Verbose "Renaming intermediate native $sourceRelativePath to target $relativePath"
-                        $out=& $git mv -f "$sourceRelativePath" "$relativePath"  2>&1 
+                        invoke-git mv -f "$sourceRelativePath" "$relativePath" | write-verbose
 
-                        Write-Host ($out | convertto-json)
-                        
 
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath from $backupHead"
-                            # Revert the original sourcerelativePath
-                            $out=& $git checkout -f $backupHead -- "$sourceRelativePath" 2>&1
-                            if ($out -is [System.Management.Automation.ErrorRecord]) {
-                                Write-Verbose "git checkout failed $backupHead $sourceRelativePath"
-                                throw $out
-                            }
+                            
+                            invoke-git checkout -f $backupHead -- "$sourceRelativePath" | write-verbose
                         }
 
                         
@@ -1093,9 +1268,17 @@ foreach ($cs in $sortedHistory) {
                     # Let it continue to Edit!
                 } else {
 
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Without source, addding"
-                    # Continue processing as normal file
-                    $forceAddNoSource = $true
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Without source"
+
+                    if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Without source, deleting"
+                        $ensureDeleted = $true
+                    } else {
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Without source, adding"
+                        # Continue processing as normal file
+                        $forceAddNoSource = $true
+                    }
+                    
                 }
               
             }
@@ -1125,13 +1308,14 @@ foreach ($cs in $sortedHistory) {
           # Add/Edit - Downloading:
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Add -or 
                 $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Edit -or 
-                $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -or # Stand alone (or with sourcerename in changeset) can have modified content...
+                $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Encoding -or  # Easier to just download the state TFS wants this to be, to ensure equal hash
+                $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Rename -or    # Stand alone (or with sourcerename in changeset) can have modified content...
                 $forceAddNoSource ) {
         
                 # Default Commit File action: Edit, Add, Branch without source and so on:
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Downloading" -ForegroundColor Gray
 
-                try {
+          
                     # Creates the target file and directory structure
                     $target = new-item -path $relativePath -itemType File -force -erroraction silentlycontinue
                     remove-item -path $relativePath
@@ -1151,33 +1335,17 @@ foreach ($cs in $sortedHistory) {
                     $realFullName = Get-RealCasedPath -path $fullName
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realFullName from $fullName"
                     $realRelativePath = $realFullName.SubString($realFullName.Length - $relativePath.Trim().Length)
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path"
                     $realRelativePath = $realRelativePath.Replace("\","/")
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real git  relative path"
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path"
                     # Remove the file or directory  - Is this strictly required ?
-                    $out=& $git add "$realRelativePath" 2>&1
-    
-                    if ($out -is [System.Management.Automation.ErrorRecord]) {
-                        Write-Host ($out |convertto-json )
-                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File download add failed" 
-                    } 
+           
 
+                    invoke-git add -f "$realRelativePath" | write-verbose
+                    
                     
                     $qualityCheckNotApplicable = $true
                     $fileDeleted = $false
                     
-
-                } catch {
-                    Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath Error: Failed to download ${itemPath} [$changesetId/$itemId] to $relativePath : $_" -ForegroundColor Red
-                    throw("Failed to download $itemPath to $relativePath")
-                }
-
-                # This fails intermittently, maybe a add -A is better
-                #$out=git add "$relativePath" 2>&1
-                #if ($out -is [System.Management.Automation.ErrorRecord]) {
-                #    Write-Verbose "Git add $relativePath failed, for $($target.FullName)"
-                #    throw $out
-                #}
             }
 
 
@@ -1188,27 +1356,36 @@ foreach ($cs in $sortedHistory) {
                  -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting" -ForegroundColor Gray
 
+                if (Test-Path -path $relativePath -PathType Leaf) {
+                    
+                    $gitLocalName = get-gititem -fileName $relativePath
 
-                # Make the delete
-                $originalPreference = $ErrorActionPreference
-                $ErrorActionPreference = 'Continue'
+                 <#  $gitLocalName = $relativePath.Replace("\","/").Trim()
+                    $dir = [System.IO.Path]::GetDirectoryName($gitLocalName)
+                    $dir = $dir.Replace("\","/")+"/"
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] '$dir' '$gitLocalName' - Deleting - Searching for real relative path"
+                    $gitLocalName = invoke-git ls-files "$dir" | ? { $_ -ieq "$gitLocalName" }
+                  #>
+                    if ($gitLocalName -eq $null) {
+                        throw "File not found to delete"
+                    }
 
-                # Flip to linux
-                $relativePath = $relativePath.Replace("\","/").Trim()
-                # Remove the file or directory
-                $out=& $git rm -f "$relativePath" 2>&1
-                # Flip to windows
-                $relativePath = $relativePath.Replace("/","\")
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $gitLocalName - Deleting - Real relative path"
+                    
+                    # Remove the file or directory
+                    invoke-git rm -f "$gitLocalName" | write-verbose
+                
+                    $fileDeleted = $true
 
 
-                $ErrorActionPreference = $originalPreference
-
-                $fileDeleted = $true
-                if ($out -is [System.Management.Automation.ErrorRecord]) {
-                    Write-Host ($out |convertto-json )
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - File allready deleted/missing. (TFS Supported)" 
-                } 
-
+                } else {
+                    if ($ensureDeleted) {
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $gitLocalName - Deleting - Already deleted (accept)"
+                    } else {
+                        throw "File already missing?"
+                    }
+                }
+                
             }
         
         } catch {
@@ -1230,7 +1407,7 @@ foreach ($cs in $sortedHistory) {
                 $qcStatus ="Pass"
                 if (-not $fileDeleted) {
                     if (-not $qualityCheckNotApplicable) {
-                        $tmpFileName = "$env:TEMP\QCFile.tmp"
+                        $tmpFileName = [System.IO.Path]::GetTempFileName()
 
                         # Ensure previous file is not present
                         remove-item -path $tmpFileName -force -erroraction SilentlyContinue
@@ -1289,77 +1466,27 @@ foreach ($cs in $sortedHistory) {
         }
     }
 
+    
 
-    try {
-        # Set environment variables for commit author and date
-        $env:GIT_AUTHOR_NAME = $changeset.OwnerDisplayName
-        $env:GIT_AUTHOR_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
-        $env:GIT_AUTHOR_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
-        $env:GIT_COMMITTER_NAME = $changeset.OwnerDisplayName
-        $env:GIT_COMMITTER_EMAIL = "$($changeset.OwnerDisplayName.Replace(' ', '.'))"
-        $env:GIT_COMMITTER_DATE = $changeset.CreationDate.ToString('yyyy-MM-dd HH:mm:ss K')
+    # Commit changes to Git
+    foreach($branch in $branchChanges.Keys) {
+        
+        Commit-ChangesetToGit -Changeset $changeset -branchName $branch
 
-        # Commit changes to Git
-        foreach($branch in $branchChanges.Keys) {
-            push-location $branch
-            
+        $gitGCCounter++
 
-            # Stage all changes
-            $o = & $git status 2>&1
-            write-verbose ($o -join "`n")
-
-            # Stage all changes
-            $o = & $git add -A 2>&1
-            write-verbose ($o -join "`n")
-
-            # Prepare commit message, handle any type of comments and special chars
-            $commentTmpFile = [System.IO.Path]::GetTempFileName()
-            "$($changeset.Comment) [TFS-$($changeset.ChangesetId)]" | Out-File -FilePath $commentTmpFile -Encoding ASCII -NoNewline
-            
-            # Make the commit
-            $originalPreference = $ErrorActionPreference
-            $ErrorActionPreference = 'Continue'
-
-            # Fetch current for validation
-            $currentHash = & $git rev-parse HEAD 
-            
-            # Handle special  commit message chars:
-            & $git commit -F $commentTmpFile --allow-empty 2>&1 | Write-Host
-
-            $hash = & $git rev-parse HEAD  
-            $ErrorActionPreference  = $originalPreference
-            Remove-Item $commentTmpFile
-
-            if ($hash -eq $currentHash) {
-                throw "Commit failed, stopping for review"
-            }
-
-            $branchHashTracker["$branch-$changesetId"] =  $hash
-            Write-Host "[TFS-$changesetId] [$branch] [$hash] Comitted" -ForegroundColor Gray
-            pop-location
-
-            $gitGCCounter++
-
-        }
-
-    } finally {
-
-        # Clean up environment variables
-        Remove-Item Env:\GIT_AUTHOR_NAME -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_AUTHOR_EMAIL -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_AUTHOR_DATE -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_COMMITTER_NAME -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_COMMITTER_DATE -ErrorAction SilentlyContinue
     }
+
     
    
     if ($gitGCCounter -gt 10) {
         $gitGCCounter = 0
-        push-location $projectBranch
-        Write-Verbose "Performing git garbage collection, every 20'th commit"
-        & $git gc --quiet
-        pop-location
+        # Disabled due to excessive failures, at least with cygwin git
+
+       # push-location $projectBranch
+        #Write-Verbose "Performing git garbage collection, every 20'th commit"
+        #invoke-git gc
+        #pop-location
     }
 
 
@@ -1376,6 +1503,7 @@ foreach ($cs in $sortedHistory) {
         gitGCCounter = $gitGCCounter
         branchHashTracker = $branchHashTracker
         branches = $branches
+        processingChangesetId = $processingChangesetId
     } | convertto-json | out-file (join-path $targetRoot "laststate.json")
 
     write-host "state file saved"
