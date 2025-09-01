@@ -128,9 +128,6 @@ param(
     [Parameter(mandatory=$false)]
     [switch]$Continue,
 
-    [Parameter(mandatory=$false)]
-    [switch]$Continue,
-
     [Parameter(Mandatory=$false)]
     [string]$git = (if ([string]::IsNullOrEmpty($ENV:GIT_PATH)) { "git" } else { $ENV:GIT_PATH }),
 
