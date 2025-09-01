@@ -160,6 +160,11 @@ param(
 
 $global:GIT_PATH = $git
 
+if (-not (Test-Path -path $git)) {
+    Write-Host "Git executable not found at path: $git" -ForegroundColor Red
+    exit 1
+}
+
 # Setting code page 
 #chcp 437
 
