@@ -123,7 +123,7 @@ param(
     [string]$PrimaryBranchName = "main",
 
     [Parameter(Mandatory=$false)]
-    [int]$FromChangesetId = 0,
+    [int]$ContinueFrom = 0,
 
     [Parameter(mandatory=$false)]
     [switch]$Continue,
@@ -429,7 +429,11 @@ function Get-GitItem {
     
     if ($found -eq $null) {
 
-    
+        #  tree scanning  requires reference
+        if ([String]::IsNullOrEmpty($hash)) {
+            $hash ="head"
+        }
+        
         # Then look in tree with direct path (faster than full recursive scan)
         try {
             
@@ -443,10 +447,7 @@ function Get-GitItem {
             }
         }
         if ($found -eq $null) {
-            # Finally, full tree scan if direct path fails (handles case sensitivity issues)
-            if ([String]::IsNullOrEmpty($hash)) {
-                $hash ="head"
-            }
+
             Write-Verbose "Get-GitItem: Tree-scanning in $hash (slow)"        
             $found = invoke-git ls-tree -r --name-only $hash | ? { $_ -ieq "$gitLocalName" }
         }
@@ -500,14 +501,17 @@ function Get-SourceItem {
 
     # Scan current first, as this will not be possible to git history scan if in current - Check if file is in current folder structure (could use git status file here)
     # This is what TFS does, but it should really have picked from previous.
-    if ($Source.ChangesetId -eq $changesetId -and $Source.BranchName -eq $currentBranchName -and (Test-Path $Source.RelativePath)) {
-        Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] $($Source.RelativePath) found in current path"
-        $Source.ChangesetId = $changesetId
-        $Source.Hash = $null
+    #if ($Source.ChangesetId -eq $changesetId -and $Source.BranchName -eq $currentBranchName -and (Test-Path $Source.RelativePath)) {
+    #    Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] $($Source.RelativePath) found in current path"
+    #    $Source.ChangesetId = $changesetId
+    #    $Source.Hash = $null
+        
+        # To identify the correct case
+    #    $Source.RelativePath = (get-gititem -fileName $Source.RelativePath)
+    #    return $Source
+    #}
 
-        $Source.RelativePath = (get-gititem -fileName $Source.RelativePath)
-        return $Source
-    }
+
 
     if ($Source.ChangesetId -ne $changesetId -and $Source.Hash -eq $null) {
         Write-Verbose "Get-SourceItem: Source Hash cannot be null"
@@ -948,16 +952,22 @@ if ($Continue -and (Test-Path "laststate.json")) {
     $branchHashTracker = $state.branchHashTracker
     $branches  = $state.branches
     if ($state.processingChangesetId -gt 0) {
-        $FromChangesetId  = $state.processingChangesetId
+        $ContinueFrom  = $state.processingChangesetId
     }
 
-    Write-Host "Rolling back to prepare for $FromChangesetId"
-    push-location $projectBranch
-    git reset --hard HEAD
-    git clean -fd
-    git gc
-    pop-location
-    Write-Host "Resuming processing from $FromChangesetId"
+
+    dir -directory | % { 
+        $folder = $_.Name
+        Write-Warning "Rolling back changes in $folder"
+        push-location $folder
+        git reset --hard HEAD
+        git clean -fd
+        git gc
+        pop-location
+    }
+
+
+    Write-Host "Ready to continue from $ContinueFrom"
 }
 
 
@@ -991,8 +1001,8 @@ $branchChanges = @{}
 
 
 $fromVersion = $null
-if ($FromChangesetId -gt 0) {
-    $fromVersion = new-object Microsoft.TeamFoundation.VersionControl.Client.ChangesetVersionSpec $FromChangesetId
+if ($ContinueFrom -gt 0) {
+    $fromVersion = new-object Microsoft.TeamFoundation.VersionControl.Client.ChangesetVersionSpec $ContinueFrom
 }
 
 # DOWNLOAD all TFS Project history
@@ -1015,7 +1025,7 @@ $sortedHistory = $history | Sort-Object CreationDate
 $totalChangesets = $sortedHistory.Count
 Write-Host "Found $totalChangesets changesets - processing from oldest to newest" -ForegroundColor Green
 
-$totalChangesets +=$FromChangesetId
+$totalChangesets +=$ContinueFrom
 
 try {   # Finally block to save state.
 
