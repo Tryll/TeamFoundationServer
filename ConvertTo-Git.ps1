@@ -129,7 +129,8 @@ param(
     [switch]$Continue,
 
     [Parameter(Mandatory=$false)]
-    [string]$git = (if ([string]::IsNullOrEmpty($ENV:GIT_PATH)) { "git" } else { $ENV:GIT_PATH }),
+    [string]$git = $ENV:GIT_PATH,
+    #(if ([string]::IsNullOrEmpty($ENV:GIT_PATH)) { "git" } else { $ENV:GIT_PATH }),
 
 
     # Quality control effectively checks every iteration of a file, this will slow down the process, but ensure the files are correct.
@@ -350,6 +351,7 @@ function Invoke-Git {
           
             }
             # fatal and others
+            Write-Warning "$gitPath $escapedArgs"
             throw($message)
         }
     }
@@ -405,24 +407,48 @@ function Get-GitItem {
             $fileName,
 
             [Parameter(Mandatory=$false)]
-            $hash="HEAD") 
+            $hash="")  
 
 
     $gitLocalName = $fileName.Replace("\","/")
      # First look in commit, fastest - identify git local case
-    $found = invoke-git show --name-only $hash | ? { $_ -ieq "$gitLocalName" }
+    
+    $files =@()
+    try {
+        $files = invoke-git show --name-only $hash 
+    } catch {
+        if ($_.Exception.Message.EndsWith("any commits yet")) {
+            #ignore
+        } else {
+            # rethrowing
+            throw ($_)
+        }
+    }
+
+    $found = $files | ? { $_ -ieq "$gitLocalName" }
+    
     if ($found -eq $null) {
 
+    
         # Then look in tree with direct path (faster than full recursive scan)
+        try {
         $found = invoke-git ls-tree --name-only $hash -- "$gitLocalName"
+        } catch {
+            if ($_.Exception.Message.StartsWith("fatal: Not a valid object name")) {
+                #ignore
+            } else {
+                throw ($_)
+            }
+        }
         if ($found -eq $null) {
             # Finally, full tree scan if direct path fails (handles case sensitivity issues)
             Write-Verbose "Get-GitItem: Tree-scanning in $hash (slow)"
             $found = invoke-git ls-tree -r --name-only $hash | ? { $_ -ieq "$gitLocalName" }
         }
-
     }
 
+ 
+    
     return $found
 }
 
@@ -1372,8 +1398,14 @@ foreach ($cs in $sortedHistory) {
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] '$dir' '$gitLocalName' - Deleting - Searching for real relative path"
                     $gitLocalName = invoke-git ls-files "$dir" | ? { $_ -ieq "$gitLocalName" }
                   #>
+
+                    # This should be resticted to the first few changesets
                     if ($gitLocalName -eq $null) {
-                        throw "File not found to delete"
+                        Write-Verbose "File not found to delete"
+                        # Introduce and delete
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Reintroducing"                        
+                        $changeItem.DownloadFile($relativePath)
+                        $gitLocalName = $relativePath
                     }
 
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $gitLocalName - Deleting - Real relative path"
