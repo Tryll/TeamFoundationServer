@@ -432,7 +432,9 @@ function Get-GitItem {
     
         # Then look in tree with direct path (faster than full recursive scan)
         try {
-        $found = invoke-git ls-tree --name-only $hash -- "$gitLocalName"
+            
+            $found = invoke-git ls-tree --name-only $hash -- "$gitLocalName"
+
         } catch {
             if ($_.Exception.Message.StartsWith("fatal: Not a valid object name")) {
                 #ignore
@@ -442,7 +444,10 @@ function Get-GitItem {
         }
         if ($found -eq $null) {
             # Finally, full tree scan if direct path fails (handles case sensitivity issues)
-            Write-Verbose "Get-GitItem: Tree-scanning in $hash (slow)"
+            if ([String]::IsNullOrEmpty($hash)) {
+                $hash ="head"
+            }
+            Write-Verbose "Get-GitItem: Tree-scanning in $hash (slow)"        
             $found = invoke-git ls-tree -r --name-only $hash | ? { $_ -ieq "$gitLocalName" }
         }
     }
