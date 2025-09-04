@@ -618,7 +618,7 @@ function Commit-ChangesetToGit {
             
         $currentHash = $null
         try {
-             $currentHash = invoke-git rev-parse HEAD
+             $currentHash = invoke-git rev-parse head
         } catch {
             # first commit can report missing HEAD
         }          
@@ -628,7 +628,7 @@ function Commit-ChangesetToGit {
 
     
         
-        $hash = invoke-git rev-parse HEAD  
+        $hash = invoke-git rev-parse head  
         
         if ($currentHash -ne $null -and $hash -eq $currentHash) {
             throw "Commit failed, stopping for review"
@@ -1239,7 +1239,7 @@ foreach ($cs in $sortedHistory) {
                         if ($sourceBranchName -ne $branchName) {
                             push-location ..\$sourceBranchName
                         }
-                        $backupHead = invoke-git rev-parse HEAD
+                        $backupHead = invoke-git rev-parse head
                         if ($sourceBranchName -ne $branchName) {
                             pop-location
                         }
