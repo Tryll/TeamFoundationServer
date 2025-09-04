@@ -402,6 +402,8 @@ function Get-TfsItem {
 
 }
 
+
+
 function Get-GitItem {
     param( [Parameter(Mandatory=$true)]
             $fileName,
@@ -410,14 +412,22 @@ function Get-GitItem {
             $hash="")  
 
 
+    # GIT core.IgnoreCase does not work consistently unfortunately. So we have to make our own case invariant search for this file.
+    # We also try to do this as effectively as possible.
+
+    # Help git by using unix styled paths 
     $gitLocalName = $fileName.Replace("\","/")
      # First look in commit, fastest - identify git local case
     
-    $files =@()
+    $result = $null
+    
     try {
-        $files = invoke-git show --name-only $hash 
+        $found = invoke-git show --name-status $hash -- "$gitLocalName" 
+        $result = @{status =""; path=""} 
+        $result['status'], $result['path'] = $found[-1].Split("`t")
+        return 
     } catch {
-        if ($_.Exception.Message.EndsWith("any commits yet")) {
+        if ($_.Exception.Message.EndsWith("any commits yet") -or $_.Exception.Message.EndsWith(("No such file or directory"))) {
             #ignore
         } else {
             # rethrowing
@@ -425,37 +435,56 @@ function Get-GitItem {
         }
     }
 
-    $found = $files | ? { $_ -ieq "$gitLocalName" }
-    
-    if ($found -eq $null) {
 
-        #  tree scanning  requires reference
-        if ([String]::IsNullOrEmpty($hash)) {
-            $hash ="head"
-        }
-        
-        # Then look in tree with direct path (faster than full recursive scan)
+
+    # Try manually case search scanning
+    if ($result -eq $null ) {
+        Write-Verbose "Get-GitItem: Trying manual case invariant search"      
         try {
-            
-            $found = invoke-git ls-tree --name-only $hash -- "$gitLocalName"
-
+            $found = invoke-git show --name-status $hash | ? { $_ -ieq "$gitLocalName" }
+            $result = @{status =""; path=""} 
+            $result['status'], $result['path'] = $found[-1].Split("`t")
         } catch {
-            if ($_.Exception.Message.StartsWith("fatal: Not a valid object name")) {
+            if ($_.Exception.Message.EndsWith("any commits yet")) {
                 #ignore
             } else {
+                # rethrowing
                 throw ($_)
             }
         }
-        if ($found -eq $null) {
-
-            Write-Verbose "Get-GitItem: Tree-scanning in $hash (slow)"        
-            $found = invoke-git ls-tree -r --name-only $hash | ? { $_ -ieq "$gitLocalName" }
-        }
     }
-
- 
     
-    return $found
+    #if ($found -eq $null) {
+
+        #  tree scanning  requires reference
+    #    if ([String]::IsNullOrEmpty($hash)) {
+    #        $hash ="head"
+     #   }
+
+      #  Write-Verbose "Get-GitItem: Tree-scanning in $hash (slow)"        
+       # try {
+        #    $found = invoke-git ls-tree -r --name-only $hash | ? { $_ -ieq "$gitLocalName" }
+
+        #}# catch {
+        #if ($_.Exception.Message.StartsWith("fatal: Not a valid object name")) {
+            #ignore
+        #} else {
+        #    throw ($_)
+        #}
+   
+        #}
+    #}
+    if ($result -eq $null ) {   
+       if ([String]::IsNullOrEmpty($hash)) {
+            $hash ="head"
+       }
+        write-verbose "get-gititem did not find $gitLocalName in $hash"
+    } else { 
+        $result.path = $result.path.Replace("/","\")  # windows format
+        write-verbose "get-gititem found ${result.path} with status ${result.status} in $hash for $gitLocalName"
+    }
+    
+    return $result
 }
 
 
@@ -489,6 +518,7 @@ function Get-SourceItem {
     $Source.ChangesetId = $change.MergeSources[0].VersionTo
     $Source.ChangesetIdFrom = $change.MergeSources[0].VersionFrom
     $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]
+    $Source.Deleted = $false
     # Simple fix for Root, using global $projectPath
     #if ($Source.Branch.TfsPath -eq $projectPath) {
     #    $Source.Branch.TfsPath+="/main"
@@ -499,88 +529,66 @@ function Get-SourceItem {
 
     Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] [$($Source.Hash)] with rewrite '$($Source.Branch.Rewrite)' for $($Source.RelativePath)"
 
-    # Scan current first, as this will not be possible to git history scan if in current - Check if file is in current folder structure (could use git status file here)
-    # This is what TFS does, but it should really have picked from previous.
-    #if ($Source.ChangesetId -eq $changesetId -and $Source.BranchName -eq $currentBranchName -and (Test-Path $Source.RelativePath)) {
-    #    Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] $($Source.RelativePath) found in current path"
-    #    $Source.ChangesetId = $changesetId
-    #    $Source.Hash = $null
-        
-        # To identify the correct case
-    #    $Source.RelativePath = (get-gititem -fileName $Source.RelativePath)
-    #    return $Source
-    #}
 
+    if ($changesetId -eq $source.ChangesetId) {
+        Write-Verbose "Get-SourceItem: Referencing self / current changeset, attempt to find it locally first"
+        $lastFoundFile = get-gititem -fileName $gitLocalName
+        $lastFoundFileStatus = $lastFoundFile.status
+        $lastFoundFile = $lastFoundFile.path
+        $Source.RelativePath = $lastFoundFile
+        Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" in TFS-$changesetId"
+        return $Source
+    }
 
 
     if ($Source.ChangesetId -ne $changesetId -and $Source.Hash -eq $null) {
         Write-Verbose "Get-SourceItem: Source Hash cannot be null"
     }
 
-    # Scan in range if required
-
     #Write-Verbose "Get-SourceItem: Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
     $lastFoundIn=0
     $lastFoundFile=""
-    $gitLocalName = $Source.RelativePath.Replace("\","/")
+    $gitLocalName = $Source.RelativePath
 
     # Iterate from Top to Bottom, exit on first hit as this will be the newest change
     for($i= $Source.ChangesetId; $i -ge $Source.ChangesetIdFrom; $i--) {
+        $Source.ChangesetId = $i
+        $Source.Hash = $null
+        # TFS supports references to deleted files, isnt that marvelous.
+        # We need to check if we are trying to refer a deleted file, then accept and return empty source as it is impossible to merge from a deleted commit
+        $previous = get-tfsitem -changesetid $i -item $Source.RelativePath
+        if ($previous -ne $null -and $previous.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
+            Write-Verbose "Get-SourceItem: [$($Source.BranchName)] [TFS-$i] $($Source.RelativePath) Found deleted in previous TFS changeset reference."
+            # Returns empty Source
+      
+            $Source.Deleted = $true
+            return $Source
+        }
 
         # Check if $i/"changesetid" is valid for this branch as a previous commit
         if ($branchHashTracker.ContainsKey("$($Source.BranchName)-$i")) {
             # Fetch hash from previous commit
             $tryHash = $branchHashTracker["$($Source.BranchName)-$i"]
+            $Source.Hash = $tryHash
 
             Write-Verbose "Get-SourceItem: Looking in $($Source.BranchName)-$i : $tryHash"
 
             # First look in commit, fastest
             $lastFoundFile = get-gititem -fileName $gitLocalName -hash $tryHash 
+            $lastFoundFileStatus = $lastFoundFile.status
+            $lastFoundFile = $lastFoundFile.path
+            $Source.RelativePath = $lastFoundfile
+
+            Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" in TFS-$lastFoundIn"
+            return $Source
             
-
-            if ($lastFoundFile -ne $null ) {
-                $lastFoundIn=$i
-                # Break on first hit
-                break
-            } else {
-                
-                # TFS supports references to deleted files, isnt that marvelous.
-                # We need to check if we are referencing a deleted file, then accept and return empty source as it is impossible to merge from a deleted commit
-                $previous = get-tfsitem -changesetid $i -item $Source.RelativePath
-                if ($previous -ne $null -and $previous.ChangeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete) {
-                    Write-Verbose "Get-SourceItem: [$($Source.BranchName)] [TFS-$i] $($Source.RelativePath) Found deleted in previous TFS changeset."
-                    # Returns empty Source
-                    $Source.ChangesetId = $i
-                    $Source.Hash = $null
-                    return $Source
-                }
-
-                # Continue searching
-
-            }
         }
     }
 
 
-    if ($lastFoundIn -ne 0) {
-        # using lastFoundFile to match case:
-        Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" in TFS-$lastFoundIn"
-
-        $Source.ChangesetId = $lastFoundIn
-        # reverting back to windows format
-        $Source.RelativePath = $lastFoundfile.Replace("/","\") 
-        $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]      
-    }  else {
-
-        # No source solution found, shouldnt happen
-        throw("Get-SourceItem: Scan failed to find $($Source.RelativePath) for changeset range $($Source.ChangesetId)-$($Source.ChangesetIdFrom)")
-    }
-
-
-    Write-Verbose "Get-SourceItem: [$($Source.BranchName)] [$($Source.ChangesetId)-$($Source.ChangesetIdFrom)] [$($Source.Hash)] $($Source.RelativePath)"
-
+    # No source solution found, shouldnt happen
+    throw("Get-SourceItem: Scan failed to find $($Source.RelativePath) for changeset range $($Source.ChangesetId)-$($Source.ChangesetIdFrom)")
  
-    return $Source
 }
 
 
@@ -1406,6 +1414,8 @@ foreach ($cs in $sortedHistory) {
                 if (Test-Path -path $relativePath -PathType Leaf) {
                     
                     $gitLocalName = get-gititem -fileName $relativePath
+                    $gitLocalNameStatus =$gitLocalName.status
+                    $gitLocalName = $gitLocalName.path
 
                  <#  $gitLocalName = $relativePath.Replace("\","/").Trim()
                     $dir = [System.IO.Path]::GetDirectoryName($gitLocalName)
