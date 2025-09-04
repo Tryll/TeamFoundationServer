@@ -621,10 +621,14 @@ function Commit-ChangesetToGit {
         
         # Enter source branch for early commit
     
-       
-        invoke-git status  | Write-Host
+        Write-Verbose "Checking staging state"
+        invoke-git status -s 
         
-        invoke-git add -vfA | Write-Host
+        Write-Verbose "Staging files for commit"
+        invoke-git add -vfA 
+
+        Write-Verbose "Verifying staging state"
+        invoke-git status -s 
      
         # Prepare commit message, handle any type of comments and special chars
         $commentTmpFile = [System.IO.Path]::GetTempFileName()
@@ -635,13 +639,13 @@ function Commit-ChangesetToGit {
              $currentHash = invoke-git rev-parse head
         } catch {
             # first commit can report missing HEAD
-        }          
+        }
 
+        Write-Verbose "Committing staged files for TFS-$($changeset.ChangesetId) on branch $branchName"
         # Handle special  commit message chars:
-        invoke-git commit -F $commentTmpFile --allow-empty | Write-Host
+        invoke-git commit -F $commentTmpFile --allow-empty 
 
     
-        
         $hash = invoke-git rev-parse head  
         
         if ($hash -eq $currentHash) {
