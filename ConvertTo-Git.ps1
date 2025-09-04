@@ -958,7 +958,7 @@ if ($Continue -and (Test-Path "laststate.json")) {
 
     dir -directory | % { 
         $folder = $_.Name
-        Write-Warning "Rolling back changes in $folder"
+        Write-Warning "Rolling back changes in $folder for changeset $ContinueFrom"
         push-location $folder
         git reset --hard HEAD
         git clean -fd
