@@ -636,7 +636,7 @@ function Commit-ChangesetToGit {
             
         $currentHash = $null
         try {
-             $currentHash = invoke-git rev-parse head
+             $currentHash = invoke-git rev-parse HEAD
         } catch {
             # first commit can report missing HEAD
         }
@@ -646,7 +646,7 @@ function Commit-ChangesetToGit {
         invoke-git commit -F $commentTmpFile --allow-empty 
 
     
-        $hash = invoke-git rev-parse head  
+        $hash = invoke-git rev-parse HEAD  
         
         if ($hash -eq $currentHash) {
             Write-Host "Previous $currentHash"
@@ -1260,7 +1260,7 @@ foreach ($cs in $sortedHistory) {
                         if ($sourceBranchName -ne $branchName) {
                             push-location ..\$sourceBranchName
                         }
-                        $backupHead = invoke-git rev-parse head
+                        $backupHead = invoke-git rev-parse HEAD
                         if ($sourceBranchName -ne $branchName) {
                             pop-location
                         }
