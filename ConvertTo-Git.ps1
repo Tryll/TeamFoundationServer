@@ -420,12 +420,40 @@ function Get-GitItem {
      # First look in commit, fastest - identify git local case
     
     $result = $null
+
+    # If no hash we're in working directory
+    if ($hash -eq "") {
+
+        # Checking local commit story first
+        $found = invoke-git status -s -- "$gitLocalName"
+        if ($found -ne $null) {
+            $result = @{status =""; path=""} 
+            $result['status'], $result['path'] = $found.Split(" ", 2)
+            $result.path = $result.path.Replace("/","\").Trim()  # windows format
+            write-verbose ("Get-GitItem: Found {0} with status {1} for $gitLocalName" -f $result.path, $result.status)
+            return $result
+        } 
+
+        $found = invoke-git status -s | ? { $_ -ieq "$gitLocalName" }
+        if ($found -ne $null) {
+            $result = @{status =""; path=""} 
+            $result['status'], $result['path'] = $found.Split(" ", 2)
+            $result.path = $result.path.Replace("/","\").Trim()  # windows format
+            write-verbose ("Get-GitItem: Found {0} with status {1} for $gitLocalName with search" -f $result.path, $result.status)
+            return $result
+        }
+    
+
+    }
+
     
     try {
         $found = invoke-git show --name-status $hash -- "$gitLocalName" 
         $result = @{status =""; path=""} 
         $result['status'], $result['path'] = $found[-1].Split("`t")
-        return 
+        $result.path = $result.path.Replace("/","\").Trim()  # windows format
+        write-verbose ("Get-GitItem: Found {0} with show status {1} in {2} for {3}" -f $result.path, $result.status, $hash, $gitLocalName)
+        return $result
     } catch {
         if ($_.Exception.Message.EndsWith("any commits yet") -or $_.Exception.Message.EndsWith(("No such file or directory"))) {
             #ignore
@@ -436,55 +464,28 @@ function Get-GitItem {
     }
 
 
-
-    # Try manually case search scanning
-    if ($result -eq $null ) {
-        Write-Verbose "Get-GitItem: Trying manual case invariant search"      
-        try {
-            $found = invoke-git show --name-status $hash | ? { $_ -ieq "$gitLocalName" }
-            $result = @{status =""; path=""} 
-            $result['status'], $result['path'] = $found[-1].Split("`t")
-        } catch {
-            if ($_.Exception.Message.EndsWith("any commits yet")) {
-                #ignore
-            } else {
-                # rethrowing
-                throw ($_)
-            }
+        
+    try {
+        $found = invoke-git show --name-status $hash | ? { $_ -ieq "$gitLocalName" }
+        $result = @{status =""; path=""} 
+        $result['status'], $result['path'] = $found[-1].Split("`t")
+        $result.path = $result.path.Replace("/","\").Trim()  # windows format
+        write-verbose ("Get-GitItem: Found {0} with show status {1} in {2} for {3} with search" -f $result.path, $result.status, $hash, $gitLocalName)
+        return $result
+    } catch {
+        if ($_.Exception.Message.EndsWith("any commits yet")) {
+            #ignore
+        } else {
+            # rethrowing
+            throw ($_)
         }
     }
+ 
+
+    write-verbose "Get-GitItem Did not find $gitLocalName in $hash"
     
-    #if ($found -eq $null) {
-
-        #  tree scanning  requires reference
-    #    if ([String]::IsNullOrEmpty($hash)) {
-    #        $hash ="head"
-     #   }
-
-      #  Write-Verbose "Get-GitItem: Tree-scanning in $hash (slow)"        
-       # try {
-        #    $found = invoke-git ls-tree -r --name-only $hash | ? { $_ -ieq "$gitLocalName" }
-
-        #}# catch {
-        #if ($_.Exception.Message.StartsWith("fatal: Not a valid object name")) {
-            #ignore
-        #} else {
-        #    throw ($_)
-        #}
-   
-        #}
-    #}
-    if ($result -eq $null ) {   
-       if ([String]::IsNullOrEmpty($hash)) {
-            $hash ="head"
-       }
-        write-verbose "get-gititem did not find $gitLocalName in $hash"
-    } else { 
-        $result.path = $result.path.Replace("/","\")  # windows format
-        write-verbose "get-gititem found ${result.path} with status ${result.status} in $hash for $gitLocalName"
-    }
     
-    return $result
+    return $null
 }
 
 
@@ -533,11 +534,16 @@ function Get-SourceItem {
     if ($changesetId -eq $source.ChangesetId) {
         Write-Verbose "Get-SourceItem: Referencing self / current changeset, attempt to find it locally first"
         $lastFoundFile = get-gititem -fileName $gitLocalName
-        $lastFoundFileStatus = $lastFoundFile.status
-        $lastFoundFile = $lastFoundFile.path
-        $Source.RelativePath = $lastFoundFile
-        Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" in TFS-$changesetId"
-        return $Source
+        if ($lastFoundFile -ne $null) {
+            $lastFoundFileStatus = $lastFoundFile.status
+            $lastFoundFile = $lastFoundFile.path
+            $Source.RelativePath = $lastFoundFile
+            Write-Verbose "Get-SourceItem: Scan found file ""$lastFoundFile"" in TFS-$changesetId"
+            return $Source
+        } else {
+            Write-Verbose "Get-SourceItem: Scan did not find file ""$gitLocalName"" in current changeset"
+        }
+    
     }
 
 
@@ -638,7 +644,9 @@ function Commit-ChangesetToGit {
         
         $hash = invoke-git rev-parse head  
         
-        if ($currentHash -ne $null -and $hash -eq $currentHash) {
+        if ($hash -eq $currentHash) {
+            Write-Host "Previous $currentHash"
+            Write-Host "Commit hash $hash"
             throw "Commit failed, stopping for review"
         }
 
@@ -1371,35 +1379,35 @@ foreach ($cs in $sortedHistory) {
                 Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Downloading" -ForegroundColor Gray
 
           
-                    # Creates the target file and directory structure
-                    $target = new-item -path $relativePath -itemType File -force -erroraction silentlycontinue
-                    remove-item -path $relativePath
+                # Creates the target file and directory structure
+                $target = new-item -path $relativePath -itemType File -force -erroraction silentlycontinue
+                remove-item -path $relativePath
+            
+                $changeItem.DownloadFile($target.FullName)
+
+                if (-not (Test-Path -path $target.FullName)) {
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Download failed, file not found"
+                    throw "stop here"
+                }
+
+                # Flip to linux and notify git
+
+                # Looks like we may have to add the correct file path for the file here for git to not get index problems.
+                # Ie we need to resolve the actuall path
+                $fullName = $target.FullName.Trim()
+                $realFullName = Get-RealCasedPath -path $fullName
+                Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realFullName from $fullName"
+                $realRelativePath = $realFullName.SubString($realFullName.Length - $relativePath.Trim().Length)
+                $realRelativePath = $realRelativePath.Replace("\","/")
+                Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path"
+                # Remove the file or directory  - Is this strictly required ?
+        
+
+                invoke-git add -f "$realRelativePath" | write-verbose
                 
-                    $changeItem.DownloadFile($target.FullName)
-
-                    if (-not (Test-Path -path $target.FullName)) {
-                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Download failed, file not found"
-                        throw "stop here"
-                    }
-
-                    # Flip to linux and notify git
-
-                    # Looks like we may have to add the correct file path for the file here for git to not get index problems.
-                    # Ie we need to resolve the actuall path
-                    $fullName = $target.FullName.Trim()
-                    $realFullName = Get-RealCasedPath -path $fullName
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realFullName from $fullName"
-                    $realRelativePath = $realFullName.SubString($realFullName.Length - $relativePath.Trim().Length)
-                    $realRelativePath = $realRelativePath.Replace("\","/")
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path"
-                    # Remove the file or directory  - Is this strictly required ?
-           
-
-                    invoke-git add -f "$realRelativePath" | write-verbose
-                    
-                    
-                    $qualityCheckNotApplicable = $true
-                    $fileDeleted = $false
+                
+                $qualityCheckNotApplicable = $true
+                $fileDeleted = $false
                     
             }
 
