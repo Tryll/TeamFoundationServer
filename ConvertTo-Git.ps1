@@ -135,7 +135,7 @@ param(
 
     # Quality control effectively checks every iteration of a file, this will slow down the process, but ensure the files are correct.
     [Parameter(Mandatory=$false)]
-    [bool]$WithQualityControl = $true,
+    [switch]$WithQualityControl,
 
     [Parameter(Mandatory=$false, ParameterSetName="UseWindows")]
     [switch]$UseWindows,
@@ -651,6 +651,7 @@ function Commit-ChangesetToGit {
         if ($hash -eq $currentHash) {
             Write-Host "Previous $currentHash"
             Write-Host "Commit hash $hash"
+            Write-Host "No changes to commit or allready committed? We'll break here as this should not happen"
             throw "Commit failed, stopping for review"
         }
 
