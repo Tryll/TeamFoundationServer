@@ -135,7 +135,7 @@ param(
 
     # Quality control effectively checks every iteration of a file, this will slow down the process, but ensure the files are correct.
     [Parameter(Mandatory=$false)]
-    [switch]$WithQualityControl,
+    [bool]$WithQualityControl = $true,
 
     [Parameter(Mandatory=$false, ParameterSetName="UseWindows")]
     [switch]$UseWindows,
