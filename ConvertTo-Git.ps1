@@ -446,11 +446,11 @@ function Get-GitItem {
             return $result
         } 
 
-        $found = invoke-git status -s | ? { $s,$f =$_.Split(" ", 2); $f.Trim() -ieq "$gitLocalName" }
+        $found = invoke-git status -s | ? { $s,$f =$_.Split(" ", 2); $f -ieq "$gitLocalName" }
         if (-not [String]::IsNullOrEmpty($found)) {
             $result = @{status =""; path=""; hash = ""; gitpath=""} 
             $result['status'], $result['path'] = $found.Split(" ", 2)
-            $result.gitpath = $gitLocalName
+            $result.gitpath = ConvertTo-GitPath($result.path)
             $result.path = ConvertTo-WindowsPath($result.path)
             write-verbose ("Get-GitItem: Found {0} with status {1} for $gitLocalName with search" -f $result.path, $result.status)
             return $result
@@ -491,11 +491,11 @@ function Get-GitItem {
 
         
     try {
-        $found = invoke-git show --name-status $hash | ? { $s,$f=$_.Split("`t",2); $f.Trim() -ieq "$gitLocalName" }
+        $found = invoke-git show --name-status $hash | ? { $s,$f=$_.Split("`t",2); $f -ieq "$gitLocalName" }
         if (-not [String]::IsNullOrEmpty($found) ) {
             $result = @{status =""; path=""; hash = $hash; gitpath=""} 
-            $result['status'], $result['path'] = $found[-1].Split("`t",2)
-            $result.gitpath = $gitLocalName
+            $result['status'], $result['path'] = $found.Split("`t",2)
+            $result.gitpath = ConvertTo-GitPath($result.path)
             $result.path = ConvertTo-WindowsPath($result.path)
             if ([String]::IsNullOrEmpty($hash)) {
                 try {
@@ -580,10 +580,10 @@ function Get-SourceItem {
                 $Source.Hash = $lastFoundFile.hash
             }
          
-            Write-Verbose "Get-SourceItem: Found ""$($Source.RelativePath)"" in TFS-$changesetId"
+            Write-Verbose "Get-SourceItem: Found ""$($Source.RelativePath)"" in previous commit"
             return $Source
         }  else {
-            Write-Verbose "Get-SourceItem: Did not find $($Source.RelativePath) in TFS-$changesetId"
+            Write-Verbose "Get-SourceItem: Did not find $($Source.RelativePath) in previous commit"
         }
     
     }
