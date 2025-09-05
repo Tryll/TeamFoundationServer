@@ -556,7 +556,7 @@ function Get-SourceItem {
     }
 
     # Iterate from Top to Bottom, exit on first hit as this will be the newest change
-    for($i= ($Source.ChangesetId - 1); $i -ge $Source.ChangesetIdFrom; $i--) {
+    for($i= $Source.ChangesetId ; $i -ge $Source.ChangesetIdFrom; $i--) {
 
         # TFS supports references to deleted files, isnt that marvelous.
         # We need to check if we are trying to refer a deleted file, then accept and return empty source as it is impossible to merge from a deleted commit
