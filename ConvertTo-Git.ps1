@@ -350,6 +350,7 @@ function Invoke-Git {
                 return Invoke-Git @args
           
             }
+            Write-Warning "Working directory $((Get-Location).Path)"
             # fatal and others
             Write-Warning "$gitPath $escapedArgs"
             throw($message)
@@ -425,7 +426,7 @@ function Get-GitItem {
     if ($hash -eq "") {
 
         # Checking local commit story first
-        $found = invoke-git status -s -- "$gitLocalName"
+        $found = invoke-git status -s "--" "$gitLocalName"
         if (-not [String]::IsNullOrEmpty($found)) {
             $result = @{status =""; path=""} 
             $result['status'], $result['path'] = $found.Split(" ", 2)
@@ -448,7 +449,7 @@ function Get-GitItem {
 
     
     try {
-        $found = invoke-git show --name-status $hash -- "$gitLocalName" 
+        $found = invoke-git show --name-status $hash "--" "$gitLocalName" 
         if (-not [String]::IsNullOrEmpty($found)) {
             $result = @{status =""; path=""} 
             $result['status'], $result['path'] = $found[-1].Split("`t",2)
