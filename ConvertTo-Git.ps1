@@ -289,8 +289,8 @@ function Compare-Files {
     #$fullPath1 = (Resolve-Path $File1).Path
     #$fullPath2 = (Resolve-Path $File2).Path
     
-    $fullPath1 = $File1.Replace("\","/")
-    $fullPath2 = $File2.Replace("\","/")
+    $fullPath1 = ConvertTo-GitPath $File1
+    $fullPath2 = ConvertTo-GitPath $File2
     # Use git diff with -w to ignore all whitespace differences (including BOMs)
     invoke-git diff --no-index --exit-code -w "$fullPath1" "$fullPath2"
    
@@ -446,7 +446,7 @@ function Get-GitItem {
             return $result
         } 
 
-        $found = invoke-git status -s | ? { $_ -ieq "$gitLocalName" }
+        $found = invoke-git status -s | ? { $s,$f =$_.Split(" ", 2); $f.Trim() -ieq "$gitLocalName" }
         if (-not [String]::IsNullOrEmpty($found)) {
             $result = @{status =""; path=""; hash = ""; gitpath=""} 
             $result['status'], $result['path'] = $found.Split(" ", 2)
@@ -491,7 +491,7 @@ function Get-GitItem {
 
         
     try {
-        $found = invoke-git show --name-status $hash | ? { $_ -ieq "$gitLocalName" }
+        $found = invoke-git show --name-status $hash | ? { $s,$f=$_.Split("`t",2); $f.Trim() -ieq "$gitLocalName" }
         if (-not [String]::IsNullOrEmpty($found) ) {
             $result = @{status =""; path=""; hash = $hash; gitpath=""} 
             $result['status'], $result['path'] = $found[-1].Split("`t",2)
