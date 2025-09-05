@@ -620,14 +620,12 @@ function Commit-ChangesetToGit {
         
         # Enter source branch for early commit
     
-        Write-Verbose "Checking staging state"
+        #Write-Verbose "Checking staging state"
         invoke-git status -s 
         
         Write-Verbose "Staging files for commit"
         invoke-git add -vfA 
 
-        Write-Verbose "Verifying staging state"
-        invoke-git status -s 
      
         # Prepare commit message, handle any type of comments and special chars
         $commentTmpFile = [System.IO.Path]::GetTempFileName()
