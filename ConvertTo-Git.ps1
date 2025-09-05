@@ -451,7 +451,7 @@ function Get-GitItem {
         $found = invoke-git show --name-status $hash -- "$gitLocalName" 
         if (-not [String]::IsNullOrEmpty($found)) {
             $result = @{status =""; path=""} 
-            $result['status'], $result['path'] = $found[-1].Split("`t")
+            $result['status'], $result['path'] = $found[-1].Split("`t",2)
             $result.path = $result.path.Replace("/","\").Trim()  # windows format
             write-verbose ("Get-GitItem: Found {0} with show status {1} in {2} for {3}" -f $result.path, $result.status, $hash, $gitLocalName)
             return $result
@@ -471,7 +471,7 @@ function Get-GitItem {
         $found = invoke-git show --name-status $hash | ? { $_ -ieq "$gitLocalName" }
         if (-not [String]::IsNullOrEmpty($found)) {
             $result = @{status =""; path=""} 
-            $result['status'], $result['path'] = $found[-1].Split("`t")
+            $result['status'], $result['path'] = $found[-1].Split("`t",2)
             $result.path = $result.path.Replace("/","\").Trim()  # windows format
             write-verbose ("Get-GitItem: Found {0} with show status {1} in {2} for {3} with search" -f $result.path, $result.status, $hash, $gitLocalName)
             return $result
@@ -540,11 +540,9 @@ function Get-SourceItem {
     
         $lastFoundFile = get-gititem -fileName $Source.RelativePath
         if ($lastFoundFile -ne $null) {
-            $lastFoundFileStatus = $lastFoundFile.status
-            $lastFoundFile = $lastFoundFile.path
-            $Source.RelativePath = $lastFoundFile
+            $Source.RelativePath = $lastFoundFile.path
             $Source.Deleted = $lastFoundFile.status.Contains("D")
-            Write-Verbose "Get-SourceItem: Found ""$lastFoundFile"" in TFS-$changesetId"
+            Write-Verbose "Get-SourceItem: Found ""$($Source.RelativePath)"" in TFS-$changesetId"
             return $Source
         }  else {
             Write-Verbose "Get-SourceItem: Did not find $($Source.RelativePath) in TFS-$changesetId"
@@ -556,10 +554,6 @@ function Get-SourceItem {
     if ($Source.ChangesetId -ne $changesetId -and $Source.Hash -eq $null) {
         Write-Verbose "Get-SourceItem: Source Hash cannot be null"
     }
-
-    #Write-Verbose "Get-SourceItem: Not Implemented: Source range merge $($Source.ChangesetId) - $($Source.ChangesetIdFrom), using top range only for now."
-    $lastFoundIn=0
-    $lastFoundFile=""
 
     # Iterate from Top to Bottom, exit on first hit as this will be the newest change
     for($i= ($Source.ChangesetId - 1); $i -ge $Source.ChangesetIdFrom; $i--) {
