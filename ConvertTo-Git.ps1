@@ -304,20 +304,16 @@ function Invoke-Git {
    
     $gitPath = if ($global:GIT_PATH) { $global:GIT_PATH } else { if ($ENV:GIT_PATH) { $ENV:GIT_PATH } else { "git" } }
 
-    # Powershell has an inconsistency problem where piped arrays with single elements are returned as the element
-    # Escapes {} with \ for \{ \} in filepaths
-    $escapedArgs =@()
-    foreach ($arg in $args) {
-        $escapedArgs += $arg -replace '([{}])', '\$1'
-    }
 
     $originalPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     # Powershell has alot of problems providing both stderr and stdout
     $stdErr =@()
     $stdOut = @()
+
+
        
-    & $gitPath @escapedArgs 2>&1 | % { if($_ -is [String]) { $stdOut+=$_ } else { $stdErr+=$_.Exception.Message} }
+    & $gitPath $args 2>&1 | % { if($_ -is [String]) { $stdOut+=$_ } else { $stdErr+=$_.Exception.Message} }
     $ErrorActionPreference= $originalPreference
 
     $gitOutput = $stdErr + $stdOut
@@ -333,6 +329,12 @@ function Invoke-Git {
 
     if ($gitOutput -ne $null){
         $message =  $gitOutput[0]
+        if ($message.ToLower().StartsWith("usage:")) {
+            Write-Warning $message
+                $args | convertto-json |write-verbose
+            throw("Git command usage error: $args")
+        } 
+
         if ($message.ToLower().StartsWith("warning")) {
             Write-Warning $message
             return $null
@@ -353,7 +355,8 @@ function Invoke-Git {
             }
             Write-Warning "Working directory $((Get-Location).Path)"
             # fatal and others
-            Write-Warning "$gitPath $escapedArgs"
+            Write-Warning "$gitPath $args"
+            $args | convertto-json |write-verbose
             throw($message)
         }
     }
@@ -404,6 +407,12 @@ function Get-TfsItem {
 
 }
 
+function ConvertTo-GitPath($path) {
+   (($path -replace '\\','/') -replace '([ \(\)\[\]\{\}&$`\|;*?''"])', '\$1').Trim()
+}
+function ConvertTo-WindowsPath($path) {
+   ($path -replace '/','\').Trim()  
+}
 
 
 function Get-GitItem {
@@ -418,7 +427,7 @@ function Get-GitItem {
     # We also try to do this as effectively as possible.
 
     # Help git by using unix styled paths 
-    $gitLocalName = $fileName.Replace("\","/")
+    $gitLocalName = ConvertTo-GitPath($fileName)
      # First look in commit, fastest - identify git local case
     
     $result = $null
@@ -429,18 +438,20 @@ function Get-GitItem {
         # Checking local commit story first
         $found = invoke-git status -s "--" "$gitLocalName"
         if (-not [String]::IsNullOrEmpty($found)) {
-            $result = @{status =""; path=""; hash = ""} 
+            $result = @{status =""; path=""; hash = ""; gitpath=""} 
             $result['status'], $result['path'] = $found.Split(" ", 2)
-            $result.path = $result.path.Replace("/","\").Trim()  # windows format
+            $result.gitpath = $gitLocalName
+            $result.path = ConvertTo-WindowsPath($result.path)
             write-verbose ("Get-GitItem: Found {0} with status {1} for $gitLocalName" -f $result.path, $result.status)
             return $result
         } 
 
         $found = invoke-git status -s | ? { $_ -ieq "$gitLocalName" }
         if (-not [String]::IsNullOrEmpty($found)) {
-            $result = @{status =""; path=""; hash = ""} 
+            $result = @{status =""; path=""; hash = ""; gitpath=""} 
             $result['status'], $result['path'] = $found.Split(" ", 2)
-            $result.path = $result.path.Replace("/","\").Trim()  # windows format
+            $result.gitpath = $gitLocalName
+            $result.path = ConvertTo-WindowsPath($result.path)
             write-verbose ("Get-GitItem: Found {0} with status {1} for $gitLocalName with search" -f $result.path, $result.status)
             return $result
         }
@@ -452,9 +463,10 @@ function Get-GitItem {
     try {
         $found = invoke-git show --name-status $hash "--" "$gitLocalName" 
         if (-not [String]::IsNullOrEmpty($found)) {
-            $result = @{status =""; path=""; hash = $hash} 
+            $result = @{status =""; path=""; hash = $hash; gitpath=""} 
             $result['status'], $result['path'] = $found[-1].Split("`t",2)
-            $result.path = $result.path.Replace("/","\").Trim()  # windows format
+            $result.gitpath = $gitLocalName
+            $result.path = ConvertTo-WindowsPath($result.path)
             if ([String]::IsNullOrEmpty($hash)) {
                 try {
                      $result['hash'] = (invoke-git rev-parse HEAD)
@@ -481,9 +493,10 @@ function Get-GitItem {
     try {
         $found = invoke-git show --name-status $hash | ? { $_ -ieq "$gitLocalName" }
         if (-not [String]::IsNullOrEmpty($found) ) {
-            $result = @{status =""; path=""; hash = $hash} 
+            $result = @{status =""; path=""; hash = $hash; gitpath=""} 
             $result['status'], $result['path'] = $found[-1].Split("`t",2)
-            $result.path = $result.path.Replace("/","\").Trim()  # windows format
+            $result.gitpath = $gitLocalName
+            $result.path = ConvertTo-WindowsPath($result.path)
             if ([String]::IsNullOrEmpty($hash)) {
                 try {
                     $result['hash'] = (invoke-git rev-parse HEAD)
@@ -543,6 +556,7 @@ function Get-SourceItem {
     $Source.ChangesetIdFrom = $change.MergeSources[0].VersionFrom
     $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]
     $Source.Deleted = $false
+    $Source.GitPath =""
     # Simple fix for Root, using global $projectPath
     #if ($Source.Branch.TfsPath -eq $projectPath) {
     #    $Source.Branch.TfsPath+="/main"
@@ -561,6 +575,7 @@ function Get-SourceItem {
         if ($lastFoundFile -ne $null) {
             $Source.RelativePath = $lastFoundFile.path
             $Source.Deleted = $lastFoundFile.status.Contains("D")
+            $Source.GitPath = $lastFoundFile.gitpath
             if ($lastFoundFile.hash -ne "") {
                 $Source.Hash = $lastFoundFile.hash
             }
@@ -606,7 +621,7 @@ function Get-SourceItem {
                 $Source.Deleted = $lastFoundFile.status.Contains("D")
                 $Source.ChangesetId = $i
                 $Source.Hash = $lastFoundFile.hash
-
+                $Source.GitPath = $lastFoundFile.gitpath
                 Write-Verbose "Get-SourceItem: Found ""$($Source.RelativePath)"" in TFS-$i"
                 return $Source
             }
@@ -1160,6 +1175,7 @@ foreach ($cs in $sortedHistory) {
         # Find file relative path by branch name (folder) and item path replaced with branch local path.
         # This is the magic that will ensure we track the same files across branches.
         $relativePath = $itemPath.Replace($branch.TfsPath, $branch.Rewrite).TrimStart('/').Replace('/', '\')
+        $gitRelativePath = ConvertTo-GitPath $relativePath
 
         # Enter Branch:
         Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] [$itemType] $relativePath - Processing" -ForegroundColor Cyan
@@ -1302,36 +1318,16 @@ foreach ($cs in $sortedHistory) {
                         # If File was deleted in source commit, we fetch the pevious version to allow processing to resume
                         $WithRestore = ""
                         if ($source.Deleted) {
-                            Write-Verbose "Checking out $sourceRelativePath from $sourcehash"
                             $previous = "^"
                             $WithRestore = "[restored]"
                         }
-                     
 
-                        Write-Verbose "Checking out $sourceRelativePath from $sourcehash $WithRestore"
-                        $sourceRelativePath = $sourceRelativePath.Replace("\","/")
-
+                        Write-Verbose "Checking out $sourceRelativePath ($($source.GitPath)) from $sourcehash $WithRestore"
                   
-                        invoke-git checkout -f $sourcehash$previous -- "$sourceRelativePath" | write-verbose
-              
+                        invoke-git checkout -f $sourcehash$previous -- "$($source.GitPath)" | write-verbose
                         
-                        # We need to flip this back for this to work
-                        $sourceRelativePath = $sourceRelativePath.Replace("/","\")
-                      
                        
-                    } else {
-                        <#if ($changeItem.DeletionId -gt 0) {
-                              
-                                # Decision: Will not forward merge deleted items, by findit it and removing it.
-                                # This could lead to a problem later when a file is request "undeleted", we'll have to look it up at that time.
-                                # This approach keeps GIT history correct.
-                                Write-Verbose "$sourceRelativePath is intended to be deleted"
-                                $fileDeleted = $true
-                                # Avoiding move processing
-                                $sourceRelativePath = $relativePath
-                                
-                        } #>
-                    }
+                    } 
                     
 
                     # CHECKOUT RENAME: Source and Destination is not the same : (GIT PROBLEMS:)
@@ -1345,25 +1341,18 @@ foreach ($cs in $sortedHistory) {
                         $targetFile = new-item -path $relativePath -type file -force -erroraction SilentlyContinue 
                         remove-item -path $relativePath -force -erroraction SilentlyContinue | Out-Null
 
-                        # Flip to linux style
-                        $sourceRelativePath=$sourceRelativePath.Replace("\","/") # Flip to linux path seps
-                        $relativePath = $relativePath.Replace("\","/")
-
+          
                         Write-Verbose "Renaming intermediate native $sourceRelativePath to target $relativePath"
-                        invoke-git mv -f "$sourceRelativePath" "$relativePath" | write-verbose
+                        invoke-git mv -f "$($source.GitPath)" "$gitRelativePath" | write-verbose
 
 
                         if ($backupHead -ne $null) {
                             Write-Verbose "Reverting intermediate $sourceRelativePath from $backupHead"
                             
-                            invoke-git checkout -f $backupHead -- "$sourceRelativePath" | write-verbose
+                            invoke-git checkout -f $backupHead -- "$($source.GitPath)" | write-verbose
                         }
 
                         
-                        # Flip back to windows
-                        $relativePath = $relativePath.Replace("/","\")
-                        $sourceRelativePath = $sourceRelativePath.Replace("/","\") 
-             
                     }
 
 
@@ -1437,7 +1426,7 @@ foreach ($cs in $sortedHistory) {
                 $realFullName = Get-RealCasedPath -path $fullName
                 Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realFullName from $fullName"
                 $realRelativePath = $realFullName.SubString($realFullName.Length - $relativePath.Trim().Length)
-                $realRelativePath = $realRelativePath.Replace("\","/")
+                $realRelativePath = convertto-gitpath $realRelativePath
                 Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Real relative path"
                 # Remove the file or directory  - Is this strictly required ?
         
@@ -1456,41 +1445,19 @@ foreach ($cs in $sortedHistory) {
             # Remove file, as last step, but not on undelete/SourceRename
             if ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Delete -and
                  -not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::SourceRename)) {
-                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting" -ForegroundColor Gray
+                Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting ($gitRelativePath)" -ForegroundColor Gray
 
                 if (Test-Path -path $relativePath -PathType Leaf) {
                     
-                    $gitLocalName = get-gititem -fileName $relativePath
-                    $gitLocalNameStatus =$gitLocalName.status
-                    $gitLocalName = $gitLocalName.path
-
-                 <#  $gitLocalName = $relativePath.Replace("\","/").Trim()
-                    $dir = [System.IO.Path]::GetDirectoryName($gitLocalName)
-                    $dir = $dir.Replace("\","/")+"/"
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] '$dir' '$gitLocalName' - Deleting - Searching for real relative path"
-                    $gitLocalName = invoke-git ls-files "$dir" | ? { $_ -ieq "$gitLocalName" }
-                  #>
-
-                    # This should be resticted to the first few changesets
-                    if ($gitLocalName -eq $null) {
-                        Write-Verbose "File not found to delete"
-                        # Introduce and delete
-                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Reintroducing"                        
-                        $changeItem.DownloadFile($relativePath)
-                        $gitLocalName = $relativePath
-                    }
-
-                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $gitLocalName - Deleting - Real relative path"
-                    
                     # Remove the file or directory
-                    invoke-git rm -f "$gitLocalName" | write-verbose
+                    invoke-git rm -f $gitRelativePath | write-verbose
                 
                     $fileDeleted = $true
 
 
                 } else {
                     if ($ensureDeleted) {
-                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $gitLocalName - Deleting - Already deleted (accept)"
+                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting ($gitRelativePath) - Already deleted (accept)"
                     } else {
                         throw "File already missing?"
                     }
