@@ -337,7 +337,7 @@ function Invoke-Git {
 
         if ($message.ToLower().StartsWith("warning")) {
             Write-Warning $message
-            return $null
+            return ""
         } 
 
         if ($message.ToLower().StartsWith("fatal") -or $message.ToLower().StartsWith("error")) {
