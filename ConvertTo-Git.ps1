@@ -408,7 +408,7 @@ function Get-TfsItem {
 }
 
 function ConvertTo-GitPath($path) {
-   (($path -replace '\\','/') -replace '([ \(\)\[\]\{\}&$`\|;*?''"])', '\$1').Trim()
+   (($path -replace '\\','/') -replace '([\(\)\[\]\{\}&$`\|;*?''"])', '\$1').Trim()
 }
 function ConvertTo-WindowsPath($path) {
    ($path -replace '/','\').Trim()  
@@ -458,7 +458,11 @@ function Get-GitItem {
 
       
         # Then check last commit
+<<<<<<< HEAD
+        $found = invoke-git log -1 --name-status "--" "$gitLocalName"
+=======
         $found = invoke-git log -1 --name-status -- "$gitLocalName"
+>>>>>>> 0d770ec6084ad6e04a49e282448fc246e03d525d
         if (-not [String]::IsNullOrEmpty($found)) {
             $result = @{status =""; path=""; hash = ""; gitpath=""} 
             $result['status'], $result['path'] = $found[-1].Split("`t", 2)
@@ -477,7 +481,11 @@ function Get-GitItem {
             if ($foundFile -eq ""){
                 # Continuously update commit hash as we go until we find file.
                 if ($_.StartsWith("commit ")) {
+<<<<<<< HEAD
+                    $commit = $_.Split(" ")[1]
+=======
                     $commit = $_
+>>>>>>> 0d770ec6084ad6e04a49e282448fc246e03d525d
                     
                 } elseif ($_.Contains("`t")) {
                     $s,$f=$_.Split("`t",2); 
@@ -1456,10 +1464,12 @@ foreach ($cs in $sortedHistory) {
                 # Creates the target file and directory structure
                 $target = new-item -path $relativePath -itemType File -force -erroraction silentlycontinue
                 remove-item -path $relativePath
-            
-                $changeItem.DownloadFile($target.FullName)
 
-                if (-not (Test-Path -path $target.FullName)) {
+                $fullPath = Join-Path -Path (get-location) -childpath $relativePath
+            
+                $changeItem.DownloadFile($fullPath )
+
+                if (-not (Test-Path -path $fullPath -PathType Leaf)) {
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Download failed, file not found"
                     throw "stop here"
                 }
