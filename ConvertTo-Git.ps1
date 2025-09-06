@@ -432,7 +432,7 @@ function Get-GitItem {
     
     $result = $null
 
-    # If no hash we're in working directory
+    # If no hash is provided, check local commit story, then commit log manually: (slow)
     if ($hash -eq "") {
 
         # Checking local commit story first
@@ -455,11 +455,57 @@ function Get-GitItem {
             write-verbose ("Get-GitItem: Found {0} with status {1} for $gitLocalName with search" -f $result.path, $result.status)
             return $result
         }
-    
+
+      
+        # Then check last commit
+        $found = invoke-git log -1 --name-status -- "$gitLocalName"
+        if (-not [String]::IsNullOrEmpty($found)) {
+            $result = @{status =""; path=""; hash = ""; gitpath=""} 
+            $result['status'], $result['path'] = $found[-1].Split("`t", 2)
+            $result.gitpath = $gitLocalName
+            $result.hash = $found | ? { $_.StartsWith("commit ") } | % { $_.Split(" ")[1] }
+            $result.path = ConvertTo-WindowsPath($result.path)
+            write-verbose ("Get-GitItem: Found {0} with status {1} for {2} in {3}" -f $result.path, $result.status, $gitLocalName, $result.hash)
+            return $result
+        } 
+
+        # Scanning changes (slow)
+        $commit = ""
+        $foundFileStatus = ""
+        $foundFile = "" 
+        invoke-git log --name-status  | % {
+            if ($foundFile -eq ""){
+                # Continuously update commit hash as we go until we find file.
+                if ($_.StartsWith("commit ")) {
+                    $commit = $_
+                    
+                } elseif ($_.Contains("`t")) {
+                    $s,$f=$_.Split("`t",2); 
+                    if ($f -ieq $gitLocalName) {
+                        $foundFileStatus = $s
+                        $foundFile = $f
+                        return
+                    }
+                }
+            }
+        }
+        
+        if ($foundFile -ne "") {
+            $result = @{
+                status =$foundFileStatus; 
+                path= ConvertTo-WindowsPath($foundFile); 
+                hash = $commit; 
+                gitpath=ConvertTo-GitPath($foundFile)
+            } 
+            write-verbose ("Get-GitItem: Found {0} with status {1} for {2} in {3} (scan)" -f $result.path, $result.status, $gitLocalName, $result.hash)
+            return $result
+        }
+
 
     }
 
 
+    # If we have a hash, we can limit the search to that commit only, much faster.
     try {
         $found = invoke-git show --name-status $hash "--" "$gitLocalName" 
         if (-not [String]::IsNullOrEmpty($found)) {
@@ -1449,8 +1495,10 @@ foreach ($cs in $sortedHistory) {
 
                 if (Test-Path -path $relativePath -PathType Leaf) {
                     
+                    $file = Get-GitItem -fileName $relativePath
+
                     # Remove the file or directory
-                    invoke-git rm -f $gitRelativePath | write-verbose
+                    invoke-git rm -f $file.gitpath | write-verbose
                 
                     $fileDeleted = $true
 
