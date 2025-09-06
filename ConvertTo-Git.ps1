@@ -337,7 +337,7 @@ function Invoke-Git {
 
         if ($message.ToLower().StartsWith("warning")) {
             Write-Warning $message
-            return $null
+            return ""
         } 
 
         if ($message.ToLower().StartsWith("fatal") -or $message.ToLower().StartsWith("error")) {
@@ -458,7 +458,9 @@ function Get-GitItem {
 
       
         # Then check last commit
+
         $found = invoke-git log -1 --name-status "--" "$gitLocalName"
+
         if (-not [String]::IsNullOrEmpty($found)) {
             $result = @{status =""; path=""; hash = ""; gitpath=""} 
             $result['status'], $result['path'] = $found[-1].Split("`t", 2)
@@ -477,7 +479,9 @@ function Get-GitItem {
             if ($foundFile -eq ""){
                 # Continuously update commit hash as we go until we find file.
                 if ($_.StartsWith("commit ")) {
+
                     $commit = $_.Split(" ")[1]
+
                     
                 } elseif ($_.Contains("`t")) {
                     $s,$f=$_.Split("`t",2); 
