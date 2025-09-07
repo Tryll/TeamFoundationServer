@@ -408,7 +408,7 @@ function Get-TfsItem {
 }
 
 function ConvertTo-GitPath($path) {
-   (($path -replace '\\','/') -replace '([\(\)\[\]\{\}&$`\|;*?''"])', '\$1').Trim()
+   (($path -replace '\\','/').Trim()) # -replace '([\[\]\{\}&$`\|;*?''"])', '\$1').Trim()
 }
 function ConvertTo-WindowsPath($path) {
    ($path -replace '/','\').Trim()  
