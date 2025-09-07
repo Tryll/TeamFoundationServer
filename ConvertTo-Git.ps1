@@ -1007,9 +1007,6 @@ $global:TFSProject = $projectPath
 $env:GIT_CONFIG_GLOBAL = Join-Path -path (pwd) -childpath ".gitconfig"
 # Default Git settings
 
-& $git config --global user.email "tfs@git"
-
-& $git config --global user.name "TFS migration"
 
 & $git config --global core.autocrlf false
 
