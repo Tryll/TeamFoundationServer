@@ -14,7 +14,7 @@ dir $gitRepoDump | % {
     $gitPath = $_.FullName
     Write-Host "branch $($tfsRelativePath):"
 
-    if (Test-Path tfsPath) {
+    if (-not (Test-Path $tfsPath)) {
         $tfsRelativePath = $_.Name -replace "-", " "
         $tfsPath = Join-Path $tfsRepoDump $tfsRelativePath/
      
