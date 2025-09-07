@@ -1516,11 +1516,11 @@ foreach ($cs in $sortedHistory) {
 
 
                 } else {
-                    if ($ensureDeleted) {
-                        Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting ($gitRelativePath) - Already deleted (accept)"
-                    } else {
-                        throw "File already missing?"
-                    }
+                    #if ($ensureDeleted) {
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting ($gitRelativePath) - Already deleted (accept)"
+                    #} else {
+                    #    throw "File already missing?"
+                    #}
                 }
                 
             }
