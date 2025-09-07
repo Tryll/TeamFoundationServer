@@ -1518,6 +1518,7 @@ foreach ($cs in $sortedHistory) {
                 } else {
                     #if ($ensureDeleted) {
                     Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Deleting ($gitRelativePath) - Already deleted (accept)"
+                    $fileDeleted = $true
                     #} else {
                     #    throw "File already missing?"
                     #}
