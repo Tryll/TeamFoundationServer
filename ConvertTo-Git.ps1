@@ -458,53 +458,63 @@ function Get-GitItem {
 
       
         # Then check last commit
+        try {
+        
+            $found = invoke-git log -1 --name-status "--" "$gitLocalName"
 
-        $found = invoke-git log -1 --name-status "--" "$gitLocalName"
+            if (-not [String]::IsNullOrEmpty($found)) {
+                $result = @{status =""; path=""; hash = ""; gitpath=""} 
+                $result['status'], $result['path'] = $found[-1].Split("`t", 2)
+                $result.gitpath = $gitLocalName
+                $result.hash = $found | ? { $_.StartsWith("commit ") } | % { $_.Split(" ")[1] }
+                $result.path = ConvertTo-WindowsPath($result.path)
+                write-verbose ("Get-GitItem: Found {0} with status {1} for {2} in {3}" -f $result.path, $result.status, $gitLocalName, $result.hash)
+                return $result
+            } 
 
-        if (-not [String]::IsNullOrEmpty($found)) {
-            $result = @{status =""; path=""; hash = ""; gitpath=""} 
-            $result['status'], $result['path'] = $found[-1].Split("`t", 2)
-            $result.gitpath = $gitLocalName
-            $result.hash = $found | ? { $_.StartsWith("commit ") } | % { $_.Split(" ")[1] }
-            $result.path = ConvertTo-WindowsPath($result.path)
-            write-verbose ("Get-GitItem: Found {0} with status {1} for {2} in {3}" -f $result.path, $result.status, $gitLocalName, $result.hash)
-            return $result
-        } 
+            # Scanning changes (slow)
+            $commit = ""
+            $foundFileStatus = ""
+            $foundFile = "" 
+            invoke-git log --name-status  | % {
+                if ($foundFile -eq ""){
+                    # Continuously update commit hash as we go until we find file.
+                    if ($_.StartsWith("commit ")) {
 
-        # Scanning changes (slow)
-        $commit = ""
-        $foundFileStatus = ""
-        $foundFile = "" 
-        invoke-git log --name-status  | % {
-            if ($foundFile -eq ""){
-                # Continuously update commit hash as we go until we find file.
-                if ($_.StartsWith("commit ")) {
+                        $commit = $_.Split(" ")[1]
 
-                    $commit = $_.Split(" ")[1]
-
-                    
-                } elseif ($_.Contains("`t")) {
-                    $s,$f=$_.Split("`t",2); 
-                    if ($f -ieq $gitLocalName) {
-                        $foundFileStatus = $s
-                        $foundFile = $f
-                        return
+                        
+                    } elseif ($_.Contains("`t")) {
+                        $s,$f=$_.Split("`t",2); 
+                        if ($f -ieq $gitLocalName) {
+                            $foundFileStatus = $s
+                            $foundFile = $f
+                            return
+                        }
                     }
                 }
             }
+            
+            if ($foundFile -ne "") {
+                $result = @{
+                    status =$foundFileStatus; 
+                    path= ConvertTo-WindowsPath($foundFile); 
+                    hash = $commit; 
+                    gitpath=ConvertTo-GitPath($foundFile)
+                } 
+                write-verbose ("Get-GitItem: Found {0} with status {1} for {2} in {3} (scan)" -f $result.path, $result.status, $gitLocalName, $result.hash)
+                return $result
+            }
+    
+      
+         } catch {
+            if ($_.Exception.Message.EndsWith("any commits yet") -or $_.Exception.Message.EndsWith(("No such file or directory"))) {
+                #ignore
+            } else {
+                # rethrowing
+                throw ($_)
+            }
         }
-        
-        if ($foundFile -ne "") {
-            $result = @{
-                status =$foundFileStatus; 
-                path= ConvertTo-WindowsPath($foundFile); 
-                hash = $commit; 
-                gitpath=ConvertTo-GitPath($foundFile)
-            } 
-            write-verbose ("Get-GitItem: Found {0} with status {1} for {2} in {3} (scan)" -f $result.path, $result.status, $gitLocalName, $result.hash)
-            return $result
-        }
-
 
     }
 
