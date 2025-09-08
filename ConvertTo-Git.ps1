@@ -311,12 +311,11 @@ function Invoke-Git {
     $stdErr =@()
     $stdOut = @()
 
-
-       
     & $gitPath $args 2>&1 | % { if($_ -is [String]) { $stdOut+=$_ } else { $stdErr+=$_.Exception.Message} }
     $ErrorActionPreference= $originalPreference
 
     $gitOutput = $stdErr + $stdOut
+
 
     $gitOutput = $gitOutput | % { 
             [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding("IBM865").GetBytes($_)) # chcp 437, DOS-862
@@ -439,14 +438,15 @@ function Get-GitItem {
         $found = invoke-git status -s "--" "$gitLocalName"
         if (-not [String]::IsNullOrEmpty($found)) {
             $result = @{status =""; path=""; hash = ""; gitpath=""; changesetid=""} 
-            $result['status'], $result['path'] = $found.Split(" ", 2)
+            $result['status'], $result['path'] = $found.Trim().Split(" ", 2)
             $result.gitpath = $gitLocalName
             $result.path = ConvertTo-WindowsPath($result.path)
             write-verbose ("Get-GitItem: status, Found {0} with {1} for $gitLocalName" -f $result.path, $result.status)
             return $result
         } 
 
-        $found = invoke-git status -s | ? { $s,$f =$_.Split(" ", 2); $f -ieq "$gitLocalName" }
+
+        $found = invoke-git status -s | ? { $s,$f =$_.Trim().Split(" ", 2); $f -ieq "$gitLocalName" } 
         if (-not [String]::IsNullOrEmpty($found)) {
             $result = @{status =""; path=""; hash = ""; gitpath=""; changesetid=""} 
             $result['status'], $result['path'] = $found.Split(" ", 2)
@@ -455,7 +455,6 @@ function Get-GitItem {
             write-verbose ("Get-GitItem: status, Found {0} with {1} for $gitLocalName with search" -f $result.path, $result.status)
             return $result
         }
-
       
         # Then check last commit
         try {
@@ -464,7 +463,11 @@ function Get-GitItem {
 
             if (-not [String]::IsNullOrEmpty($found)) {
                 $result = @{status =""; path=""; hash = ""; gitpath=""; changesetid=""} 
-                $result['status'], $result['path'] = $found[-1].Split("`t", 2)
+                $result['status'], $result['path'], $result['renametarget'] = $found[-1].Split("`t", 3)
+                if (-not [String]::IsNullOrEmpty($result['renametarget'])) {
+                    # We have a rename, use target as path
+                    $result['path'] = $result['renametarget']
+                }
                 $result.gitpath = $gitLocalName
                 $result.hash = $found | ? { $_.StartsWith("commit ") } | % { $_.Split(" ")[1] }
                 if (-not [String]::IsNullOrEmpty($result['hash'])) {
@@ -488,7 +491,11 @@ function Get-GitItem {
 
                         
                     } elseif ($_.Contains("`t")) {
-                        $s,$f=$_.Split("`t",2); 
+                        $s,$f,$r=$_.Split("`t",3); 
+                        if (-not [String]::IsNullOrEmpty($r)) {
+                            # We have a rename, use target as path
+                            $f=$r
+                        }
                         if ($f -ieq $gitLocalName) {
                             $foundFileStatus = $s
                             $foundFile = $f
