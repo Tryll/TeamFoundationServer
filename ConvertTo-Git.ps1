@@ -438,21 +438,21 @@ function Get-GitItem {
         # Checking local commit story first
         $found = invoke-git status -s "--" "$gitLocalName"
         if (-not [String]::IsNullOrEmpty($found)) {
-            $result = @{status =""; path=""; hash = ""; gitpath=""} 
+            $result = @{status =""; path=""; hash = ""; gitpath=""; changesetid=""} 
             $result['status'], $result['path'] = $found.Split(" ", 2)
             $result.gitpath = $gitLocalName
             $result.path = ConvertTo-WindowsPath($result.path)
-            write-verbose ("Get-GitItem: Found {0} with status {1} for $gitLocalName" -f $result.path, $result.status)
+            write-verbose ("Get-GitItem: status, Found {0} with {1} for $gitLocalName" -f $result.path, $result.status)
             return $result
         } 
 
         $found = invoke-git status -s | ? { $s,$f =$_.Split(" ", 2); $f -ieq "$gitLocalName" }
         if (-not [String]::IsNullOrEmpty($found)) {
-            $result = @{status =""; path=""; hash = ""; gitpath=""} 
+            $result = @{status =""; path=""; hash = ""; gitpath=""; changesetid=""} 
             $result['status'], $result['path'] = $found.Split(" ", 2)
             $result.gitpath = ConvertTo-GitPath($result.path)
             $result.path = ConvertTo-WindowsPath($result.path)
-            write-verbose ("Get-GitItem: Found {0} with status {1} for $gitLocalName with search" -f $result.path, $result.status)
+            write-verbose ("Get-GitItem: status, Found {0} with {1} for $gitLocalName with search" -f $result.path, $result.status)
             return $result
         }
 
@@ -463,12 +463,15 @@ function Get-GitItem {
             $found = invoke-git log -1 --name-status "--" "$gitLocalName"
 
             if (-not [String]::IsNullOrEmpty($found)) {
-                $result = @{status =""; path=""; hash = ""; gitpath=""} 
+                $result = @{status =""; path=""; hash = ""; gitpath=""; changesetid=""} 
                 $result['status'], $result['path'] = $found[-1].Split("`t", 2)
                 $result.gitpath = $gitLocalName
                 $result.hash = $found | ? { $_.StartsWith("commit ") } | % { $_.Split(" ")[1] }
+                if (-not [String]::IsNullOrEmpty($result['hash'])) {
+                    $result['changesetid'] = $branchHashTracker.GetEnumerator() | ? { $_.Value -eq $result['hash']} | % { $_.Key.Split("-")[1] } | select -First 1
+                }
                 $result.path = ConvertTo-WindowsPath($result.path)
-                write-verbose ("Get-GitItem: Found {0} with status {1} for {2} in {3}" -f $result.path, $result.status, $gitLocalName, $result.hash)
+                write-verbose ("Get-GitItem: log -1, Found {0} with {1} in {2} [TFS-{3}] for {4} " -f $result.path, $result.status, $result.hash, $result['changesetid'], $gitLocalName)
                 return $result
             } 
 
@@ -502,7 +505,10 @@ function Get-GitItem {
                     hash = $commit; 
                     gitpath=ConvertTo-GitPath($foundFile)
                 } 
-                write-verbose ("Get-GitItem: Found {0} with status {1} for {2} in {3} (scan)" -f $result.path, $result.status, $gitLocalName, $result.hash)
+                if (-not [String]::IsNullOrEmpty($result['hash'])) {
+                    $result['changesetid'] = $branchHashTracker.GetEnumerator() | ? { $_.Value -eq $result['hash']} | % { $_.Key.Split("-")[1] } | select -First 1
+                }
+                write-verbose ("Get-GitItem: Found {0} with {1} in {2} [TFS-{3}] for {4}  (scan)" -f $result.path, $result.status, $result.hash, $result['changesetid'],  $gitLocalName)
                 return $result
             }
     
@@ -523,20 +529,22 @@ function Get-GitItem {
     try {
         $found = invoke-git show --name-status $hash "--" "$gitLocalName" 
         if (-not [String]::IsNullOrEmpty($found)) {
-            $result = @{status =""; path=""; hash = $hash; gitpath=""} 
+            $result = @{status =""; path=""; hash = $hash; gitpath=""; changesetid=""} 
             $result['status'], $result['path'] = $found[-1].Split("`t",2)
             $result.gitpath = $gitLocalName
             $result.path = ConvertTo-WindowsPath($result.path)
             if ([String]::IsNullOrEmpty($hash)) {
                 try {
                      $result['hash'] = (invoke-git rev-parse HEAD)
+                     
                 } catch {
                     # first commit can report missing HEAD
                 }
             }
-            
-        
-            write-verbose ("Get-GitItem: Found {0} with show status {1} in {2} for {3}" -f $result.path, $result.status, $result['hash'], $gitLocalName)
+            if (-not [String]::IsNullOrEmpty($result['hash'])) {
+                    $result['changesetid'] = $branchHashTracker.GetEnumerator() | ? { $_.Value -eq $result['hash']} | % { $_.Key.Split("-")[1] } | select -First 1
+            }
+            write-verbose ("Get-GitItem: show, Found {0} with {1} in {2} [TFS-{3}] for {4}" -f $result.path, $result.status, $result.hash, $result.changesetid,  $gitLocalName)
             return $result
         }
     } catch {
@@ -553,19 +561,22 @@ function Get-GitItem {
     try {
         $found = invoke-git show --name-status $hash | ? { $s,$f=$_.Split("`t",2); $f -ieq "$gitLocalName" }
         if (-not [String]::IsNullOrEmpty($found) ) {
-            $result = @{status =""; path=""; hash = $hash; gitpath=""} 
+            $result = @{status =""; path=""; hash = $hash; gitpath=""; changesetid=""} 
             $result['status'], $result['path'] = $found.Split("`t",2)
             $result.gitpath = ConvertTo-GitPath($result.path)
             $result.path = ConvertTo-WindowsPath($result.path)
             if ([String]::IsNullOrEmpty($hash)) {
                 try {
                     $result['hash'] = (invoke-git rev-parse HEAD)
+                   
                 } catch {
                     # first commit can report missing HEAD
                 }
             }
-            
-            write-verbose ("Get-GitItem: Found {0} with show status {1} in {2} for {3} with search" -f $result.path, $result.status, $result['hash'], $gitLocalName)
+            if (-not [String]::IsNullOrEmpty($result['hash'])) {
+                    $result['changesetid'] = $branchHashTracker.GetEnumerator() | ? { $_.Value -eq $result['hash']} | % { $_.Key.Split("-")[1] } | select -First 1
+            }
+            write-verbose ("Get-GitItem: show scan, Found {0} with {1} in {2} [TFS-{3}] for {4}" -f $result.path, $result.status, $result.hash, $result.changesetid,  $gitLocalName)
             return $result
         }
     } catch {
@@ -617,6 +628,9 @@ function Get-SourceItem {
     $Source.Hash = $branchHashTracker["$($Source.BranchName)-$($Source.ChangesetId)"]
     $Source.Deleted = $false
     $Source.GitPath =""
+    $Source.IsPresent = $false
+    $Source.CurrentChangeSetId = $null
+
     # Simple fix for Root, using global $projectPath
     #if ($Source.Branch.TfsPath -eq $projectPath) {
     #    $Source.Branch.TfsPath+="/main"
@@ -627,31 +641,37 @@ function Get-SourceItem {
 
     Write-Verbose "Get-SourceItem: [$($Source.BranchPath)]:[$($Source.Branch.TfsPath)] is [$($Source.BranchName)] [$($Source.ChangesetIdFrom)-$($Source.ChangesetId)] [$($Source.Hash)] with rewrite '$($Source.Branch.Rewrite)' for $($Source.RelativePath)"
 
+    # First look what we have currently
+    $lastFoundFile = get-gititem -fileName $Source.RelativePath
+    if ($lastFoundFile -ne $null) {
+        $Source.RelativePath = $lastFoundFile.path
+        $Source.Deleted = $lastFoundFile.status.Contains("D")
+        $Source.GitPath = $lastFoundFile.gitpath
 
-    # This is done directly, as we do not have hash for current changeset yet.
-    if ($changesetId -eq $source.ChangesetId) {
-    
-        $lastFoundFile = get-gititem -fileName $Source.RelativePath
-        if ($lastFoundFile -ne $null) {
-            $Source.RelativePath = $lastFoundFile.path
-            $Source.Deleted = $lastFoundFile.status.Contains("D")
-            $Source.GitPath = $lastFoundFile.gitpath
-            if ($lastFoundFile.hash -ne "") {
-                $Source.Hash = $lastFoundFile.hash
-            }
-         
-            Write-Verbose "Get-SourceItem: Found ""$($Source.RelativePath)"" in previous commit"
-            return $Source
-        }  else {
-            Write-Verbose "Get-SourceItem: Did not find $($Source.RelativePath) in previous commit"
+
+        # If file has a hash its not staged/with changes, find changesetid
+        if ($lastFoundFile.hash -ne "") {
+            $Source.Hash = $lastFoundFile.hash
+            $Source.CurrentChangeSetId = $lastFoundFile.changesetid
         }
-    
+        if ($Source.Deleted) {
+            $Source.CurrentChangeSetId = $null
+        }
+    } 
+
+    # If we are already at the correct changeset, return it
+    if ($lastFoundFile -ne $null -and $Source.CurrentChangeSetId -eq $Source.ChangesetId -and $Source.Hash -ne $null) {
+        Write-Verbose "Get-SourceItem: Found ""$($Source.RelativePath)"" present in current changeset $($Source.ChangesetId)"
+        return $Source
     }
 
-
-    if ($Source.ChangesetId -ne $changesetId -and $Source.Hash -eq $null) {
-        Write-Verbose "Get-SourceItem: Source Hash cannot be null"
+    # If we are looking for the current staged file, return it
+    if ($lastFoundFile -ne $null -and $Source.Hash -eq $null -and $changesetId -eq $Source.ChangesetId) {
+        Write-Verbose "Get-SourceItem: Found non-staged ""$($Source.RelativePath)"" present"
+        return $Source
     }
+
+  
 
     # Iterate from Top to Bottom, exit on first hit as this will be the newest change
     for($i= $Source.ChangesetId ; $i -ge $Source.ChangesetIdFrom; $i--) {
@@ -672,7 +692,7 @@ function Get-SourceItem {
         if ($branchHashTracker.ContainsKey("$($Source.BranchName)-$i")) {
             # Fetch hash from previous commit
             $tryHash = $branchHashTracker["$($Source.BranchName)-$i"]
-            Write-Verbose "Get-SourceItem: Looking in $($Source.BranchName)-$i : $tryHash"
+            Write-Verbose "Get-SourceItem: Looking in $($Source.BranchName)-$i : $tryHareadnesh"
 
             # First look in commit, fastest
             $lastFoundFile = get-gititem -fileName $Source.RelativePath -hash $tryHash 
@@ -683,6 +703,14 @@ function Get-SourceItem {
                 $Source.Hash = $lastFoundFile.hash
                 $Source.GitPath = $lastFoundFile.gitpath
                 Write-Verbose "Get-SourceItem: Found ""$($Source.RelativePath)"" in TFS-$i"
+             
+                if ($Source.CurrentChangeSetId -ne  $null -and $Source.CurrentChangeSetId -ne $i) {
+                    Write-Verbose "Get-SourceItem: File does not match source requirement, got $($Source.CurrentChangeSetId) and require $i."
+                    $Source.CurrentChangeSetId = $null
+                }
+                if ($Source.CurrentChangeSetId -ne  $null -and $Source.CurrentChangeSetId -eq  $i) {
+                    Write-Verbose "Get-SourceItem: File is local"
+                }
                 return $Source
             }
           
@@ -1352,38 +1380,42 @@ foreach ($cs in $sortedHistory) {
                     $backupHead = $null
                     # Do not restore backup if move is in same changeset/branch/commit, the rename is rename
                     # Source has to exist
-                    if ($sourcehash -ne $null -and (Test-Path -path $sourceRelativePath)) {
-                        # If file exists in target branch, we need to revert it back to original state
-                        if ($sourceBranchName -ne $branchName) {
-                            push-location ..\$sourceBranchName
+                    if ($source.CurrentChangeSetId -eq $null) {
+
+                        if ($sourcehash -ne $null -and (Test-Path -path $sourceRelativePath)) {
+                            # If file exists in target branch, we need to revert it back to original state
+                            if ($sourceBranchName -ne $branchName) {
+                                push-location ..\$sourceBranchName
+                            }
+                            $backupHead = invoke-git rev-parse HEAD
+                            if ($sourceBranchName -ne $branchName) {
+                                pop-location
+                            }
                         }
-                        $backupHead = invoke-git rev-parse HEAD
-                        if ($sourceBranchName -ne $branchName) {
-                            pop-location
-                        }
+
+                        # What do we do for branches created in same changeset that we want to copy from here!
+
+                        # If file is not locally present and sourcehash is known, we can checkout the file directly
+                        if ($sourcehash -ne $null) { # -and $changeItem.DeletionId -eq 0) {
+
+                            #$sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip path seps back
+                            $previous = ""
+                            # If File was deleted in source commit, we fetch the pevious version to allow processing to resume
+                            $WithRestore = ""
+                            if ($source.Deleted) {
+                                $previous = "^"
+                                $WithRestore = "[restored]"
+                            }
+
+                            Write-Verbose "Checking out $sourceRelativePath ($($source.GitPath)) from $sourcehash $WithRestore"
+                    
+                            invoke-git checkout -f $sourcehash$previous -- "$($source.GitPath)" | write-verbose
+                            
+                        
+                        } 
                     }
                     
-                    
-                    # What do we do for branches created in same changeset that we want to copy from here!
-
-                    # CHECKOUT from hash, it that exists - else file is local to branch:
-                    if ($sourcehash -ne $null) { # -and $changeItem.DeletionId -eq 0) {
-
-                        #$sourceRelativePath = $sourceRelativePath.Replace("/","\") # Flip path seps back
-                        $previous = ""
-                        # If File was deleted in source commit, we fetch the pevious version to allow processing to resume
-                        $WithRestore = ""
-                        if ($source.Deleted) {
-                            $previous = "^"
-                            $WithRestore = "[restored]"
-                        }
-
-                        Write-Verbose "Checking out $sourceRelativePath ($($source.GitPath)) from $sourcehash $WithRestore"
                   
-                        invoke-git checkout -f $sourcehash$previous -- "$($source.GitPath)" | write-verbose
-                        
-                       
-                    } 
                     
 
                     # CHECKOUT RENAME: Source and Destination is not the same : (GIT PROBLEMS:)
@@ -1391,14 +1423,12 @@ foreach ($cs in $sortedHistory) {
 
                   
                         # Continue with normal rename
-                        Write-Verbose "Renaming intermediate $sourceRelativePath to target $relativePath"
+                        Write-Verbose "Renaming $sourceRelativePath to target $relativePath"
 
                         # Ensure folder structure exists, and remove the target file
                         $targetFile = new-item -path $relativePath -type file -force -erroraction SilentlyContinue 
                         remove-item -path $relativePath -force -erroraction SilentlyContinue | Out-Null
 
-          
-                        Write-Verbose "Renaming intermediate native $sourceRelativePath to target $relativePath"
                         invoke-git mv -f "$($source.GitPath)" "$gitRelativePath" | write-verbose
 
 
