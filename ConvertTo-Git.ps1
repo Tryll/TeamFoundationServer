@@ -137,6 +137,10 @@ param(
     [Parameter(Mandatory=$false)]
     [switch]$WithQualityControl,
 
+    # [System.Text.Encoding]::GetEncoding(437) or other manually.
+    [Parameter(Mandatory=$false)]
+    [System.Text.Encoding]$GitStdOutEncoding = [System.Text.Encoding]::UTF8,
+
     [Parameter(Mandatory=$false, ParameterSetName="UseWindows")]
     [switch]$UseWindows,
     
@@ -317,9 +321,12 @@ function Invoke-Git {
     $gitOutput = $stdErr + $stdOut
 
     # Handled outiside of script by setting [console]::InputEncoding and OutputEncoding = [System.Text.Encoding]::UTF8 or [System.Text.Encoding]::GetEncoding(xyz)
-    # $gitOutput = $gitOutput | % { 
-    #         [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding("IBM437").GetBytes($_)) # chcp 437, DOS-862
-    # }
+    if ($GitStdOutEncoding -ne $null) {
+        $gitOutput = $gitOutput | % { 
+                    [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding($GitStdOutEncoding).GetBytes($_)) # chcp 437, DOS-862
+        }
+    }
+     
    
     # Powershell has a problem with args and string passing - Pipes in PS reduces @("asd") to just "asd"
     if ($gitOutput -ne $null -and $gitOutput -is [String]) {
