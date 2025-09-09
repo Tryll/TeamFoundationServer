@@ -316,10 +316,10 @@ function Invoke-Git {
 
     $gitOutput = $stdErr + $stdOut
 
-
-    $gitOutput = $gitOutput | % { 
-            [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding("IBM865").GetBytes($_)) # chcp 437, DOS-862
-    }
+    # Handled outiside of script by setting [console]::InputEncoding and OutputEncoding = [System.Text.Encoding]::UTF8 or [System.Text.Encoding]::GetEncoding(xyz)
+    # $gitOutput = $gitOutput | % { 
+    #         [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding("IBM437").GetBytes($_)) # chcp 437, DOS-862
+    # }
    
     # Powershell has a problem with args and string passing - Pipes in PS reduces @("asd") to just "asd"
     if ($gitOutput -ne $null -and $gitOutput -is [String]) {
