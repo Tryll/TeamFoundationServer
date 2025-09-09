@@ -1319,7 +1319,8 @@ foreach ($cs in $sortedHistory) {
                         continue
                     }
 
-                    #  "Merge" operations on TFS without Edit or Branch is really nothing, and can be ignored if same source/target - from the perspective of GIT and change tracking.
+                    #  "Merge" operations on TFS without Edit or Branch is really nothing, and can be ignored if same source/target - from the perspective of GIT and change tracking.      
+                    #  But to percerve history we should probably use git copy              
                     if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
                         Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging without Edit/Branch is a NO-OP in GIT" -ForegroundColor Gray
                         # There is nothing to check
@@ -1526,7 +1527,12 @@ foreach ($cs in $sortedHistory) {
                 # Remove the file or directory  - Is this strictly required ?
         
 
-                invoke-git add -f "$realRelativePath" | write-verbose
+                # Maybe we should avoid adding this again if it is already present after a merge/branch
+                if (-not ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
+                    invoke-git add -f "$realRelativePath" | write-verbose
+                } else {
+                    Write-Verbose "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $realRelativePath - Skipping Add for merge, to attempt preserve history"
+                }
                 
                 
                 $qualityCheckNotApplicable = $true
