@@ -323,7 +323,7 @@ function Invoke-Git {
     # Handled outiside of script by setting [console]::InputEncoding and OutputEncoding = [System.Text.Encoding]::UTF8 or [System.Text.Encoding]::GetEncoding(xyz)
     if ($GitStdOutEncoding -ne $null) {
         $gitOutput = $gitOutput | % { 
-                    [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::GetEncoding($GitStdOutEncoding).GetBytes($_)) # chcp 437, DOS-862
+                    [System.Text.Encoding]::UTF8.GetString($GitStdOutEncoding.GetBytes($_)) # chcp 437, DOS-862
         }
     }
      
