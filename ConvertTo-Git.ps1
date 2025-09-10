@@ -132,6 +132,9 @@ param(
     [string]$git = $ENV:GIT_PATH,
     #(if ([string]::IsNullOrEmpty($ENV:GIT_PATH)) { "git" } else { $ENV:GIT_PATH }),
 
+    # Creates branches as orphan branches, otherwise branches are created from main branch.
+    [parameter(Mandatory=$false)]
+    [switch]$OrphanBranches,
 
     # Quality control effectively checks every iteration of a file, this will slow down the process, but ensure the files are correct.
     [Parameter(Mandatory=$false)]
@@ -158,7 +161,9 @@ param(
 
     [Parameter(Mandatory=$false, ParameterSetName="UsePAT")]
     [string]$AccessToken = $env:TfsAccessToken,
-    
+
+
+
     [Parameter(Mandatory=$false)]
     [string]$LogFile = "$env:TEMP\convertto-git-$(Get-Date -Format 'yyyy-MM-dd-HHmmss').txt"
 
@@ -238,7 +243,11 @@ function Add-GitBranch {
     # Creates orphan branches as default, from sourceName which is always main.
     # If this logic works, we can reduce complexity in this function.
     # Automatically creates branch with name "branchName"
-    git worktree add -f --orphan "../$branchName" | write-verbose
+    if ($OrphanBranches) {
+        git worktree add -f --orphan "../$branchName" | write-verbose
+    } else {
+        git worktree add -f "../$branchName" | write-verbose
+    }
 
     pop-location
 
@@ -323,7 +332,7 @@ function Invoke-Git {
     # Handled outiside of script by setting [console]::InputEncoding and OutputEncoding = [System.Text.Encoding]::UTF8 or [System.Text.Encoding]::GetEncoding(xyz)
     if ($GitStdOutEncoding -ne $null) {
         $gitOutput = $gitOutput | % { 
-                    [System.Text.Encoding]::UTF8.GetString($GitStdOutEncoding.GetBytes($_)) # chcp 437, DOS-862
+            [System.Text.Encoding]::UTF8.GetString($GitStdOutEncoding.GetBytes($_)) # chcp 437, DOS-862
         }
     }
      
@@ -1326,16 +1335,22 @@ foreach ($cs in $sortedHistory) {
                         continue
                     }
 
-                    #  "Merge" operations on TFS without Edit or Branch is really nothing, and can be ignored if same source/target - from the perspective of GIT and change tracking.      
-                    #  But to percerve history we should probably use git copy              
+                    #  "Merge" operations on TFS without Edit or Branch is really nothing, and can be ignored if same source/target - from the perspective of GIT and change tracking.                   
                     if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge)) {
-                        Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging without Edit/Branch is a NO-OP in GIT" -ForegroundColor Gray
-                        # There is nothing to check
-                        $qualityCheckNotApplicable = $true
+                        
+                        if ($source.BranchName -eq $branchName) {
+                            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging without Edit/Branch is a NO-OP in GIT" -ForegroundColor Gray
+                            # There is nothing to check
+                            $qualityCheckNotApplicable = $true
 
-                        # Next item!
+                            # Next item!
                         continue
+                        } else {
+                            Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - Merging from another branch" -ForegroundColor Gray
+                        }
                     } 
+
+                    
 
                      # "Delete" + "Merge" + "SourceRename" => a file was renamed (and the source file "deleted") originally, there is nothing to track here as there is nothing to do.
                      if ($changeType -eq ($changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge -and 
