@@ -1164,11 +1164,17 @@ if ($OrphanBranches) {
     Write-Host "Orphan branches enabled, will create separate branches for each TFS branch" -ForegroundColor Cyan
 }
 
+
+
+$chcp=(chcp)
+write-Host "Current console code page: $chcp" -ForegroundColor Gray
+Write-host "Console input encoding is $([Console]::InputEncoding.EncodingName)" -ForegroundColor Gray
+Write-host "Console output encoding is $([Console]::OutputEncoding.EncodingName)" -Foreground
+
 if ($GitStdOutEncoding) {
     Write-Host "Parsing Git output encoding as $($GitStdOutEncoding.EncodingName)" -ForegroundColor Cyan
   #  & $git config --global core.pager "iconv -f UTF-8 -t $GitStdOutEncoding | less"
 }
-
 # track changes to branches, will git commit to each branch
 $branchChanges = @{}
 
