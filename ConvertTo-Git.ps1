@@ -1160,6 +1160,15 @@ if ($null -eq $longPathsValue -or $longPathsValue.LongPathsEnabled -ne 1) {
 }
 
 
+if ($OrphanBranches) {
+    Write-Host "Orphan branches enabled, will create separate branches for each TFS branch" -ForegroundColor Cyan
+}
+
+if ($GitStdOutEncoding) {
+    Write-Host "Parsing Git output encoding as $($GitStdOutEncoding.EncodingName)" -ForegroundColor Cyan
+  #  & $git config --global core.pager "iconv -f UTF-8 -t $GitStdOutEncoding | less"
+}
+
 # track changes to branches, will git commit to each branch
 $branchChanges = @{}
 
