@@ -132,9 +132,9 @@ param(
     [string]$git = $ENV:GIT_PATH,
     #(if ([string]::IsNullOrEmpty($ENV:GIT_PATH)) { "git" } else { $ENV:GIT_PATH }),
 
-    # Creates branches as orphan branches, otherwise branches are created from main branch.
+    # This will create linked git branches, without this git branches are orphaned for legacy tfs changeset processing.
     [parameter(Mandatory=$false)]
-    [switch]$OrphanBranches,
+    [switch]$ModernBranching,
 
     # Quality control effectively checks every iteration of a file, this will slow down the process, but ensure the files are correct.
     [Parameter(Mandatory=$false)]
@@ -207,6 +207,8 @@ function Get-GitBranch  {
     throw ("Get-GitBranch: $tfsPath is from another project on TFS.")
 }
 
+
+
 # create a new branch directly from container, input should never be a file.
 function Add-GitBranch {
     param ($fromContainer)
@@ -243,7 +245,7 @@ function Add-GitBranch {
     # Creates orphan branches as default, from sourceName which is always main.
     # If this logic works, we can reduce complexity in this function.
     # Automatically creates branch with name "branchName"
-    if ($OrphanBranches) {
+    if (-not $ModernBranching) {
         git worktree add -f --orphan "../$branchName" | write-verbose
     } else {
         git worktree add -f "../$branchName" | write-verbose
@@ -774,7 +776,15 @@ function Commit-ChangesetToGit {
         invoke-git status -s 
         
         Write-Verbose "Staging files for commit"
-        invoke-git add -vfA 
+        # Removing this failsafe:
+        # invoke-git add -vfA 
+
+        
+
+        if ($ModernBranching) {
+            git checkout -- .                     # Reverts unstaged files that was introduced with git merge init
+            git clean -fd                         # Removes new files introduced with git merge init
+        }
 
      
         # Prepare commit message, handle any type of comments and special chars
@@ -1160,8 +1170,10 @@ if ($null -eq $longPathsValue -or $longPathsValue.LongPathsEnabled -ne 1) {
 }
 
 
-if ($OrphanBranches) {
-    Write-Host "Orphan branches enabled, will create separate branches for each TFS branch" 
+if ($ModernBranching) {
+    Write-Host "Modern branching enabled, will do git merges between them. Branches are linked and not orphaned." 
+} else {
+    Write-Host "Legacy branching enabled, will create separate and orphaned git branches for each TFS branch."
 }
 
 
@@ -1381,7 +1393,6 @@ foreach ($cs in $sortedHistory) {
                     
 
 
-
                     # Get source item
                     $source = Get-SourceItem $change $changesetId $branchName
                     $sourceBranchName = $source.BranchName
@@ -1395,6 +1406,9 @@ foreach ($cs in $sortedHistory) {
                     }
 
                     Write-Host "[TFS-$changesetId] [$branchName] [$changeCounter/$changeCount] [$changeType] $relativePath - from [tfs-$sourceChangesetId][$sourceBranchName][$sourcehash] $Deleted" -ForegroundColor Gray
+
+
+
 
                     # Check if we are merging from another branch in the same changeset, this case would not allow checkout to function properly
                     if ($changesetId -eq  $sourceChangesetId -and $branchName -ne $sourceBranchName -and $sourcehash -eq $null) {
@@ -1417,6 +1431,20 @@ foreach ($cs in $sortedHistory) {
                         # Expecting TFS to submitt its changes in sequence, so that this does not happen!
                         $branchChanges.Remove($sourceBranchName)
                         
+                    }
+
+
+                    # If ModernBranching and this is a merge request, prepare target branch if not allready prepared
+                    if ($ModernBranching -and $changeType -band [Microsoft.TeamFoundation.VersionControl.Client.ChangeType]::Merge) {
+                        #Check if we have allread prepared CWD ,else prepare
+                        $inMergeState = git rev-parse --verify MERGE_HEAD 2>$null
+                        if (-not $inMergeState) {
+                            git merge --no-commit --no-ff dev           # Initiate git merge without commit
+                            git reset HEAD                              # Unstage everything, so we stage and track changes  as normal
+
+                            #Then we do special branch commit later
+                        }
+          
                     }
                     
 
