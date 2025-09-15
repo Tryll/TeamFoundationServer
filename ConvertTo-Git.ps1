@@ -779,7 +779,7 @@ function Commit-ChangesetToGit {
         # Removing this failsafe:
         # invoke-git add -vfA 
 
-        
+
 
         if ($ModernBranching) {
             git checkout -- .                     # Reverts unstaged files that was introduced with git merge init
@@ -1175,6 +1175,8 @@ if ($ModernBranching) {
 } else {
     Write-Host "Legacy branching enabled, will create separate and orphaned git branches for each TFS branch."
 }
+
+# We should be able to do master branches, so that everything from them are linked!
 
 
 
